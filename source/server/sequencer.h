@@ -22,6 +22,7 @@ along with Foobar. If not, see <http://www.gnu.org/licenses/>.
 
 #include "prerequisites.h"
 #include "rornet.h"
+#include "notifier.h"
 #include "mutexutils.h"
 #include "broadcaster.h"
 #include "receiver.h"
@@ -152,7 +153,8 @@ public:
 
     Sequencer();
 
-    void Initialize(Listener *listener);
+    void Initialize(Listener* listener);
+	void ActivateUserAuth();
 
     //! destructor call, used for clean up
     void Close();
@@ -219,16 +221,17 @@ public:
     static unsigned int connCrash, connCount;
 
 private:
-    pthread_t m_killer_thread;  //!< thread to handle the killing of clients
-    Condition m_killer_cond;    //!< wait condition that there are clients to kill
-    Mutex m_killer_mutex;   //!< mutex used for locking access to the killqueue
-    Mutex m_clients_mutex;  //!< mutex used for locking access to the clients array
-    Listener *m_listener;
-    ScriptEngine *m_script_engine;
-    UserAuth *m_auth_resolver;
-    int m_bot_count;      //!< Amount of registered bots on the server.
-    unsigned int m_free_user_id;
-    int m_start_time;
+    pthread_t     m_killer_thread;  //!< thread to handle the killing of clients
+    Condition     m_killer_cond;    //!< wait condition that there are clients to kill
+    Mutex         m_killer_mutex;   //!< mutex used for locking access to the killqueue
+    Mutex         m_clients_mutex;  //!< mutex used for locking access to the clients array
+    Listener*     m_listener;
+    ScriptEngine* m_script_engine;
+    Notifier      m_notifier;       //!< registers and handles the online serverlist
+    UserAuth*     m_auth_resolver;
+    int           m_bot_count;      //!< Amount of registered bots on the server.
+    unsigned int  m_free_user_id;
+    int           m_start_time;
 
     std::queue<Client *> m_kill_queue; //!< holds pointer for client deletion
     std::vector<Client *> m_clients;
