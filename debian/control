@@ -1,0 +1,14 @@
+Source: ror-server
+Priority: optional
+Section: database
+Maintainer: Edgar <Edgar@AnotherFoxGuy.com>
+Build-Depends: debhelper (>= 9)
+Standards-Version: 3.9.8
+Homepage: https://github.com/RigsOfRods/ror-server
+Vcs-Git: git://github.com/RigsOfRods/ror-server.git
+Vcs-Browser: https://github.com/RigsOfRods/ror-server
+
+Package: ror-server
+Architecture: all
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Dedicated server software for Rigs of Rods

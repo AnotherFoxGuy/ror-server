@@ -1,0 +1,8 @@
+Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Debianized-By: Edgar <Edgar@AnotherFoxGuy.com>
+Upstream-Name: ror-server
+Source: https://github.com/RigsOfRods/ror-server 
+
+Files: *
+Copyright: Rigs of Rods Community
+License: GPL-3+
