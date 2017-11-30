@@ -6,6 +6,7 @@ endif (COMMAND cmake_policy)
 # done with cmake check
 
 project(rorserver)
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR}/cmake)
 
 # setup paths
 SET(RUNTIME_OUTPUT_DIRECTORY "${rorserver_SOURCE_DIR}/bin/")
@@ -13,6 +14,9 @@ SET(LIBRARY_OUTPUT_DIRECTORY "${rorserver_SOURCE_DIR}/lib/")
 SET(ARCHIVE_OUTPUT_DIRECTORY "${rorserver_SOURCE_DIR}/lib/")
 SET(EXECUTABLE_OUTPUT_PATH ${RUNTIME_OUTPUT_DIRECTORY})
 SET(LIBRARY_OUTPUT_PATH ${RUNTIME_OUTPUT_DIRECTORY})
+
+SET(JSONCPP_WITH_TESTS OFF)
+SET(JSONCPP_WITH_POST_BUILD_UNITTEST OFF)
 
 # hide some settings
 mark_as_advanced(
@@ -92,7 +96,3 @@ endif (RORSERVER_WITH_ANGELSCRIPT)
 if (RORSERVER_GUI)
     add_subdirectory("source/gui")
 endif (RORSERVER_GUI)
-
-if (RORSERVER_WITH_WEBSERVER)
-    add_subdirectory("dependencies/ctemplate")
-endif (RORSERVER_WITH_WEBSERVER)

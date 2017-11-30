@@ -41,6 +41,8 @@ along with Foobar. If not, see <http://www.gnu.org/licenses/>.
 #include <stdio.h>
 #include <string.h>
 
+#include <Wt/WApplication.h>
+
 #ifdef _WIN32
 # include "windows.h"
 # include "resource.h"
@@ -341,7 +343,11 @@ int main(int argc, char *argv[]) {
     if (Config::getWebserverEnabled()) {
         int port = Config::getWebserverPort();
         Logger::Log(LOG_INFO, "starting webserver on port %d ...", port);
-        StartWebserver(port, &s_sequencer, s_master_server.IsRegistered(), s_master_server.GetTrustLevel());
+
+        return Wt::WRun (argc, argv, [](const Wt::WEnvironment &env) {
+            return Wt::cpp14::make_unique<WebServer> (env);
+        });
+
     }
 #endif //WITH_WEBSERVER
 

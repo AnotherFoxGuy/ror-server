@@ -7,6 +7,10 @@ include_directories(${rorserver_SOURCE_DIR}/source/protocol/)
 include_directories(${rorserver_SOURCE_DIR}/source/common/)
 include_directories(${rorserver_SOURCE_DIR}/dependencies/jsoncpp/include/)
 
+if (RORSERVER_WITH_WEBSERVER)
+    find_package(Wt REQUIRED)
+endif (RORSERVER_WITH_WEBSERVER)
+
 if (RORSERVER_WITH_ANGELSCRIPT)
     add_definitions("-DWITH_ANGELSCRIPT")
     include_directories(${rorserver_SOURCE_DIR}/dependencies/angelscript/include)
@@ -15,11 +19,7 @@ endif (RORSERVER_WITH_ANGELSCRIPT)
 
 if (RORSERVER_WITH_WEBSERVER)
     add_definitions("-DWITH_WEBSERVER")
-    IF (WIN32)
-        include_directories(${CMAKE_BINARY_DIR}/dependencies/ctemplate/)
-    ELSEIF (UNIX)
-        include_directories(${CMAKE_BINARY_DIR}/dependencies/ctemplate/)
-    ENDIF (WIN32)
+    include_directories(${Wt_INCLUDE_DIR})
 endif (RORSERVER_WITH_WEBSERVER)
 
 # the final lib
@@ -32,18 +32,18 @@ if (RORSERVER_WITH_ANGELSCRIPT)
 endif (RORSERVER_WITH_ANGELSCRIPT)
 
 IF (WIN32)
-    add_definitions("/wd4251")
     include_directories(${rorserver_SOURCE_DIR}/dependencies/win32_pthread)
     target_link_libraries(rorserver ${rorserver_SOURCE_DIR}/dependencies/win32_pthread/pthreadVC2.lib)
-    target_link_libraries(rorserver mysocketw jsoncpp)
+    target_link_libraries(rorserver mysocketw jsoncpp_lib_static)
     if (RORSERVER_WITH_WEBSERVER)
-        target_link_libraries(rorserver ctemplate)
+        message("libs found: ${Wt_LIBRARIES_FOUND} | libs NOT found: ${Wt_LIBRARIES_MISSING}")
+        target_link_libraries(rorserver ${Wt_LIBRARIES})
     endif (RORSERVER_WITH_WEBSERVER)
 ELSEIF (UNIX)
     #add_definitions("-DAS_MAX_PORTABILITY")
-    target_link_libraries(rorserver mysocketw pthread dl jsoncpp)
+    target_link_libraries(rorserver mysocketw pthread dl jsoncpp_lib_static)
     if (RORSERVER_WITH_WEBSERVER)
-        target_link_libraries(rorserver ctemplate)
+        target_link_libraries(rorserver ${Wt_LIBRARIES})
     endif (RORSERVER_WITH_WEBSERVER)
 ELSEIF (APPLE)
 ENDIF (WIN32)
@@ -56,7 +56,6 @@ INSTALL(TARGETS rorserver
         )
 
 IF (WIN32)
-ELSEIF (UNIX)
     # install the files required for the runtime
     INSTALL(
             DIRECTORY ${rorserver_SOURCE_DIR}/bin/resources/

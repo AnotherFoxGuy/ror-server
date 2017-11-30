@@ -7,3 +7,5 @@ _build
 cmake-build-debug/
 
 \.idea/
+
+build/
