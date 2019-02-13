@@ -1,0 +1,42 @@
+name: Coverity
+
+on: [push]
+
+jobs:
+  Coverity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2.3.4
+        with:
+          submodules: true
+
+      - name: Download Coverity Build Tool
+        env:
+          COVERITY_SCAN_TOKEN: ${{ secrets.COVERITY_SCAN_TOKEN }}
+        run: |
+          wget -nv https://scan.coverity.com/download/cxx/linux64 --post-data "token=$COVERITY_SCAN_TOKEN&project=RigsOfRods/ror-server" -O cov-analysis-linux64.tar.gz
+          mkdir cov-analysis-linux64
+          tar xzf cov-analysis-linux64.tar.gz --strip 1 -C cov-analysis-linux64
+
+      - name: Configure
+        run: cmake -DCMAKE_BUILD_TYPE=Debug .
+
+      - name: Build with cov-build
+        run: |
+          export PATH=`pwd`/cov-analysis-linux64/bin:$PATH
+          cov-build --dir cov-int make -j4
+
+      - name: Submit the result to Coverity Scan
+        env:
+          COVERITY_SCAN_TOKEN: ${{ secrets.COVERITY_SCAN_TOKEN }}
+        run: |
+          export SHA=`git rev-parse --short HEAD`
+          tar czvf ror-server.tgz cov-int
+          curl \
+            --form project=RigsOfRods/ror-server \
+            --form token=$COVERITY_SCAN_TOKEN \
+            --form email=edgar@anotherfoxguy.com 	 \
+            --form file=@ror-server.tgz \
+            --form version=$SHA \
+            --form description="rigs of rods server gh-actions build" \
+            https://scan.coverity.com/builds
