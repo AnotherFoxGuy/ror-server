@@ -20,6 +20,7 @@ along with Foobar. If not, see <http://www.gnu.org/licenses/>.
 
 #pragma once
 
+#include "blacklist.h"
 #include "prerequisites.h"
 #include "rornet.h"
 #include "mutexutils.h"
@@ -38,8 +39,6 @@ along with Foobar. If not, see <http://www.gnu.org/licenses/>.
 #include <queue>
 #include <vector>
 #include <map>
-
-
 
 // How many not-vehicles streams has every user by default? (e.g.: "default" and "chat" are not-vehicles streams)
 // This is used for the vehicle-limit
@@ -221,6 +220,8 @@ public:
 
     std::vector<Client> GetClientListCopy();
 
+    std::vector<ban_t> GetBanListCopy();
+
     static unsigned int connCrash, connCount;
 
 private:
@@ -234,6 +235,7 @@ private:
     int m_bot_count;      //!< Amount of registered bots on the server.
     unsigned int m_free_user_id;
     int m_start_time;
+    Blacklist m_blacklist;
 
     std::queue<Client *> m_kill_queue; //!< holds pointer for client deletion
     std::vector<Client *> m_clients;
