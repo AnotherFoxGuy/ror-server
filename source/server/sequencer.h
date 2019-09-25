@@ -117,6 +117,8 @@ public:
 
     Status GetStatus() const { return m_status; }
 
+    std::string GetUsername() const { return Str::SanitizeUtf8(user.username); }
+
     RoRnet::UserInfo user;  //!< user information
 
     int drop_state;             // dropping outgoing packets?
@@ -198,6 +200,10 @@ public:
     int AuthorizeNick(std::string token, std::string &nickname);
 
     bool Kick(int to_kick_uid, int modUID, const char *msg = 0);
+
+    void RecordBan(int user_id, std::string const& ip_addr,
+        std::string const& nickname, std::string const& by_nickname,
+        std::string const& banmsg);
 
     bool Ban(int to_ban_uid, int modUID, const char *msg = 0);
 
