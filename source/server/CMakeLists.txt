@@ -16,7 +16,7 @@ endif ()
 
 IF (WIN32)
     target_compile_definitions(${PROJECT_NAME} PRIVATE PTW32_STATIC_LIB)
-    target_link_libraries(${PROJECT_NAME} PRIVATE SocketW::SocketW jsoncpp pthread)
+    target_link_libraries(${PROJECT_NAME} PRIVATE SocketW::SocketW jsoncpp_lib pthread)
 ELSEIF (UNIX)
     #add_definitions("-DAS_MAX_PORTABILITY")
     target_link_libraries(${PROJECT_NAME} PRIVATE SocketW::SocketW pthread dl jsoncpp_lib)
