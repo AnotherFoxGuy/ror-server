@@ -21,7 +21,7 @@ if(USE_PACKAGE_MANAGER)
     )
 
     if(WIN32)
-        list(ADD _BASE_DEPS pthread-win/3.0.3.1@anotherfoxguy/stable)
+        list(APPEND _BASE_DEPS pthread-win/3.0.3.1@anotherfoxguy/stable)
     endif()
 
     conan_cmake_configure(REQUIRES ${_BASE_DEPS} GENERATORS cmake_multi)
@@ -30,7 +30,6 @@ if(USE_PACKAGE_MANAGER)
 
     conan_cmake_install(PATH_OR_REFERENCE .
                         BUILD missing
-                        REMOTE conancenter
                         SETTINGS ${settings})
 
     include(${CMAKE_BINARY_DIR}/conanbuildinfo_multi.cmake)
