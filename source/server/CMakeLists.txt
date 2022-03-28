@@ -21,12 +21,10 @@ if (RORSERVER_WITH_ANGELSCRIPT)
 endif ()
 
 if (RORSERVER_WITH_WEBSERVER)
-    include(CMakeRC)
-    cmrc_add_resource_library(web_rc web/index.html)
-
     target_compile_definitions(${PROJECT_NAME} PRIVATE WITH_WEBSERVER)
     target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/dependencies/mongoose)
-    target_link_libraries(${PROJECT_NAME} PRIVATE mongoose web_rc)
+    target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_BINARY_DIR}/dependencies/ctemplate)
+    target_link_libraries(${PROJECT_NAME} PRIVATE ctemplate mongoose)
 endif (RORSERVER_WITH_WEBSERVER)
 
 IF (WIN32)
