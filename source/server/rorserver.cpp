@@ -239,6 +239,10 @@ void daemonize() {
 
 #endif // ! _WIN32
 
+#ifdef WITH_WEBSERVER
+#include "webserver.h"
+#endif
+
 int main(int argc, char *argv[]) {
     // set default verbose levels
     Logger::SetLogLevel(LOGTYPE_DISPLAY, LOG_INFO);
@@ -335,11 +339,29 @@ int main(int argc, char *argv[]) {
         }
     }
 
+#ifdef WITH_WEBSERVER
+    // start webserver if used
+    if (Config::getWebserverEnabled()) {
+      int port = Config::getWebserverPort();
+      Logger::Log(LOG_INFO, "starting webserver on port %d ...", port);
+      StartWebserver(port, &s_sequencer, s_master_server.IsRegistered(), s_master_server.GetTrustLevel());
+      Logger::Log(LOG_INFO, "Done");
+    }
+#endif //WITH_WEBSERVER
+
     // start the main program loop
     // if we need to communiate to the master user the notifier routine
     if (server_mode != SERVER_LAN) {
         //heartbeat
         while (!s_exit_requested) {
+#ifdef WITH_WEBSERVER
+          // start webserver if used
+          if (Config::getWebserverEnabled()) {
+            Logger::Log(LOG_VERBOSE, "AAA");
+            UpdateWebserver();
+          }
+#endif //WITH_WEBSERVER
+
             Messaging::UpdateMinuteStats();
             s_sequencer.UpdateMinuteStats();
 
@@ -379,6 +401,13 @@ int main(int argc, char *argv[]) {
         }
     } else {
         while (!s_exit_requested) {
+#ifdef WITH_WEBSERVER
+            // start webserver if used
+            if (Config::getWebserverEnabled()) {
+              Logger::Log(LOG_VERBOSE, "AAA");
+              UpdateWebserver();
+            }
+#endif //WITH_WEBSERVER
             Messaging::UpdateMinuteStats();
             s_sequencer.UpdateMinuteStats();
 
@@ -391,6 +420,12 @@ int main(int argc, char *argv[]) {
     }
 
     s_sequencer.Close();
+#ifdef WITH_WEBSERVER
+    // start webserver if used
+    if (Config::getWebserverEnabled()) {
+      StopWebserver();
+    }
+#endif //WITH_WEBSERVER
     return 0;
 }
 
