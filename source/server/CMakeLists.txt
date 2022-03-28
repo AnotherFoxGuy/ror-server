@@ -1,5 +1,5 @@
 FILE(GLOB_RECURSE server_src CONFIGURE_DEPENDS *.cpp *.c *.h *.rc)
-FILE(GLOB_RECURSE web_src CONFIGURE_DEPENDS web/*)
+FILE(GLOB_RECURSE web_src CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/source/web/*)
 
 # the final lib
 add_executable(${PROJECT_NAME} ${server_src})
@@ -23,7 +23,7 @@ endif ()
 
 if (RORSERVER_WITH_WEBSERVER)
     include(CMakeRC)
-    cmrc_add_resource_library(web_rc WHENCE web ${web_src})
+    cmrc_add_resource_library(web_rc WHENCE ${CMAKE_SOURCE_DIR}/source/web/ ${web_src})
 
     target_compile_definitions(${PROJECT_NAME} PRIVATE WITH_WEBSERVER)
     target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/dependencies/mongoose)
