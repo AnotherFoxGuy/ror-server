@@ -80,7 +80,6 @@ if (RORSERVER_WITH_ANGELSCRIPT)
     add_subdirectory(dependencies/angelscript EXCLUDE_FROM_ALL)
 endif ()
 if (RORSERVER_WITH_WEBSERVER)
-    add_subdirectory(dependencies/ctemplate EXCLUDE_FROM_ALL)
     add_subdirectory(dependencies/mongoose EXCLUDE_FROM_ALL)
 endif ()
 
