@@ -35,7 +35,9 @@ If not, see <http://www.gnu.org/licenses/>.
 #include "Poco/Net/HTTPServerResponse.h"
 #include <iostream>
 
-#include "web/index.h"
+#include <cmrc/cmrc.hpp>
+
+CMRC_DECLARE(web_rc);
 
 using namespace Poco;
 using namespace Poco::Net;
@@ -45,10 +47,37 @@ static int s_trust_level;
 static Sequencer *s_sequencer;
 static HTTPServer *srv;
 
+class StaticFileHandler: public HTTPRequestHandler
+{
+  void handleRequest(HTTPServerRequest& request, HTTPServerResponse& response)
+  {
+    response.setChunkedTransferEncoding(true);
+    response.setContentType("text/html");
+
+    auto efs = cmrc::web_rc::get_filesystem();
+
+    if (request.getURI() == "/") {
+      auto index_file = efs.open("index.html");
+      response.sendBuffer( index_file.begin(), index_file.size());
+
+    } else if (efs.exists(request.getURI())) {
+      auto req_file = efs.open(request.getURI());
+      response.sendBuffer( req_file.begin(), req_file.size());
+    } else {
+      response.send()
+          << "<html>"
+          << "<head><title>Hello</title></head>"
+          << "<body><h1>"
+          << request.getURI()
+          << " Hello from the POCO Web Server</h1></body>"
+          << "</html>";
+    }
+  }
+};
 
 class RequestHandlerFactory : public HTTPRequestHandlerFactory {
   HTTPRequestHandler *createRequestHandler(const HTTPServerRequest &) {
-    return new IndexHandler;
+    return new StaticFileHandler;
   }
 };
 

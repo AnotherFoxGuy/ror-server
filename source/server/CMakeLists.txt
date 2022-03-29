@@ -1,4 +1,5 @@
 FILE(GLOB_RECURSE server_src CONFIGURE_DEPENDS *.cpp *.c *.h *.rc)
+FILE(GLOB_RECURSE web_src CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/source/web/*)
 
 # the final lib
 add_executable(${PROJECT_NAME} ${server_src})
@@ -21,8 +22,11 @@ if (RORSERVER_WITH_ANGELSCRIPT)
 endif ()
 
 if (RORSERVER_WITH_WEBSERVER)
+    include(CMakeRC)
+    cmrc_add_resource_library(web_rc WHENCE ${CMAKE_SOURCE_DIR}/source/web/ ${web_src})
+
     target_compile_definitions(${PROJECT_NAME} PRIVATE WITH_WEBSERVER)
-    target_link_libraries(${PROJECT_NAME} PRIVATE Poco::Poco)
+    target_link_libraries(${PROJECT_NAME} PRIVATE web_rc Poco::Poco)
 endif (RORSERVER_WITH_WEBSERVER)
 
 IF (WIN32)
