@@ -1,6 +1,7 @@
 # ensure cmake features we need
 CMAKE_MINIMUM_REQUIRED(VERSION 3.1)
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR}/cmake)
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/cmake)
+set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} ${CMAKE_BINARY_DIR})
 
 project(rorserver)
 
@@ -14,6 +15,11 @@ SET(LIBRARY_OUTPUT_PATH ${RUNTIME_OUTPUT_DIRECTORY})
 #options
 option(RORSERVER_WITH_ANGELSCRIPT "adds scripting support" FALSE)
 option(RORSERVER_WITH_WEBSERVER "adds the webserver" FALSE)
+
+
+if (RORSERVER_WITH_WEBSERVER)
+    find_package(Poco REQUIRED)
+endif ()
 
 # hide some settings
 mark_as_advanced(
@@ -78,9 +84,6 @@ add_subdirectory(dependencies/jsoncpp EXCLUDE_FROM_ALL)
 
 if (RORSERVER_WITH_ANGELSCRIPT)
     add_subdirectory(dependencies/angelscript EXCLUDE_FROM_ALL)
-endif ()
-if (RORSERVER_WITH_WEBSERVER)
-    add_subdirectory(dependencies/mongoose EXCLUDE_FROM_ALL)
 endif ()
 
 add_subdirectory(source/server)

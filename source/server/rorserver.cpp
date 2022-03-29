@@ -354,14 +354,6 @@ int main(int argc, char *argv[]) {
     if (server_mode != SERVER_LAN) {
         //heartbeat
         while (!s_exit_requested) {
-#ifdef WITH_WEBSERVER
-          // start webserver if used
-          if (Config::getWebserverEnabled()) {
-            Logger::Log(LOG_VERBOSE, "AAA");
-            UpdateWebserver();
-          }
-#endif //WITH_WEBSERVER
-
             Messaging::UpdateMinuteStats();
             s_sequencer.UpdateMinuteStats();
 
@@ -401,13 +393,6 @@ int main(int argc, char *argv[]) {
         }
     } else {
         while (!s_exit_requested) {
-#ifdef WITH_WEBSERVER
-            // start webserver if used
-            if (Config::getWebserverEnabled()) {
-              Logger::Log(LOG_VERBOSE, "AAA");
-              UpdateWebserver();
-            }
-#endif //WITH_WEBSERVER
             Messaging::UpdateMinuteStats();
             s_sequencer.UpdateMinuteStats();
 
