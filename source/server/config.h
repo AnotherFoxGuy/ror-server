@@ -53,6 +53,8 @@ namespace Config {
 
     const std::string &getPublicPassword();
 
+    const std::string &getAPIKey();
+
     const std::string &getIPAddr();
 
     const std::string &getScriptName();
@@ -127,6 +129,8 @@ namespace Config {
     bool setTerrain(const std::string &name);
 
     bool setPublicPass(const std::string &name);
+
+    bool setAPIKey(const std::string &name);
 
     bool setIPAddr(const std::string &name);
 

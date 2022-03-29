@@ -49,6 +49,7 @@ along with Foobar. If not, see <http://www.gnu.org/licenses/>.
 static std::string s_server_name;
 static std::string s_terrain_name("any");
 static std::string s_public_password;
+static std::string s_apikey("12345");
 static std::string s_ip_addr("0.0.0.0");
 static std::string s_scriptname;
 static std::string s_authfile("server.auth");
@@ -249,6 +250,7 @@ namespace Config {
             HANDLE_ARG_VALUE("script-file", { setScriptName(value); });
             HANDLE_ARG_VALUE("terrain", { setTerrain(value); });
             HANDLE_ARG_VALUE("password", { setPublicPass(value); });
+            HANDLE_ARG_VALUE("apikey", { setAPIKey(value); });
             HANDLE_ARG_VALUE("ip", { setIPAddr(value); });
             HANDLE_ARG_VALUE("resource-dir", { setResourceDir(value); });
             HANDLE_ARG_VALUE("auth-file", { setAuthFile(value); });
@@ -303,6 +305,8 @@ namespace Config {
     const std::string &getTerrainName() { return s_terrain_name; }
 
     const std::string &getPublicPassword() { return s_public_password; }
+
+    const std::string &getAPIKey() { return s_apikey; }
 
     const std::string &getIPAddr() { return s_ip_addr; }
 
@@ -404,6 +408,12 @@ namespace Config {
         return true;
     }
 
+    bool setAPIKey(const std::string &key) {
+      if (key.empty()) return false;
+      s_apikey = key;
+      return true;
+    }
+
     bool setIPAddr(const std::string &ip) {
         if (ip.empty()) return false;
         s_ip_addr = ip;
@@ -502,6 +512,7 @@ namespace Config {
         else if (strcmp(key, "scriptname") == 0) { setScriptName(VAL_STR (value)); }
         else if (strcmp(key, "terrain") == 0) { setTerrain(VAL_STR (value)); }
         else if (strcmp(key, "password") == 0) { setPublicPass(VAL_STR (value)); }
+        else if (strcmp(key, "apikey") == 0) { setAPIKey(VAL_STR (value)); }
         else if (strcmp(key, "ip") == 0) { setIPAddr(VAL_STR (value)); }
         else if (strcmp(key, "port") == 0) { setListenPort(VAL_INT (value)); }
         else if (strcmp(key, "mode") == 0) { SetConfServerMode(VAL_STR (value)); }
