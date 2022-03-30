@@ -1,0 +1,25 @@
+{{>HEADER}}
+
+<table class="table table-striped">
+    <thead>
+    <tr class="header">
+        <th>Status</th>
+        <th>Uid</th>
+        <th>Name</th>
+        <th>IP</th>
+    </tr>
+    </thead>
+    <tbody>
+    {{#PLAYERS}}
+    <tr>
+        <td>{{STATUS}}</td>
+        <td>{{UID}}</td>
+        <td>{{NAME}}</td>
+        <td>{{IP}}</td>
+    </tr>
+    {{/PLAYERS}}
+    </tbody>
+</table>
+
+
+{{>FOOTER}}
