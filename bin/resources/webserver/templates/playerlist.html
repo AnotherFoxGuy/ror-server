@@ -21,5 +21,33 @@
     </tbody>
 </table>
 
+<div class="container">
+    <button id="AutoRefreshButton" onclick="toggleAutoRefresh()" class="btn btn-primary"></button>
+</div>
+
+<script type="application/javascript">
+    let autoRefresh = localStorage.getItem('autoRefresh');
+    const arbutton = document.getElementById('AutoRefreshButton');
+
+    let _ref;
+
+    function toggleAutoRefresh() {
+        autoRefresh = !autoRefresh;
+        localStorage.setItem('autoRefresh', autoRefresh);
+        UpdateAutoRefresh();
+    }
+
+    function UpdateAutoRefresh() {
+        if (autoRefresh) {
+            _ref = setInterval(() => location.reload(), 5000);
+            arbutton.innerText = "Disable autorefresh";
+        } else {
+            arbutton.innerText = "Enable autorefresh";
+            clearInterval(_ref)
+        }
+    }
+
+    UpdateAutoRefresh();
+</script>
 
 {{>FOOTER}}
