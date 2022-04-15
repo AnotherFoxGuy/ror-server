@@ -36,6 +36,7 @@ If not, see <http://www.gnu.org/licenses/>.
 #include <assert.h>
 
 #include <mutex>
+#include "Poco/Util/Application.h"
 
 static stream_traffic_t s_traffic = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 static std::mutex s_traffic_mutex;
@@ -183,6 +184,7 @@ namespace Messaging {
     int getTime() { return (int) time(NULL); }
 
     int broadcastLAN() {
+        auto &app = Poco::Util::Application::instance();
 #ifdef _WIN32
         // since socketw only abstracts TCP, we are on our own with UDP here :-/
         // the following code was only tested under windows
@@ -235,10 +237,10 @@ namespace Messaging {
         // RoRServer|RoRnet_2.35|192.168.0.235:12001|myterrain.terrn|0
         sprintf(tmp, "RoRServer|%s|%s:%d|%s|%d",
             RORNET_VERSION,
-            Config::getIPAddr().c_str(),
-            Config::getListenPort(),
-            Config::getTerrainName().c_str(),
-            Config::getPublicPassword() == "" ? 0 : 1
+            app.config_ip_addr.c_str(),
+            app.config_listen_port,
+            app.config_terrain_name.c_str(),
+            app.config_public_password == "" ? 0 : 1
             );
 
         // send the message

@@ -29,6 +29,8 @@ along with Foobar. If not, see <http://www.gnu.org/licenses/>.
 #include <stdexcept>
 #include <cstdio>
 
+#include "Poco/Util/Application.h"
+
 #ifdef __GNUC__
 
 #include <unistd.h>
@@ -152,12 +154,13 @@ int UserAuth::sendUserEvent(std::string user_token, std::string type, std::strin
 }
 
 int UserAuth::resolve(std::string user_token, std::string &user_nick, int clientid) {
+    auto &app = Poco::Util::Application::instance();
     // initialize the authlevel on none = normal user
     int authlevel = RoRnet::AUTH_NONE;
 
     // contact the master server
     char url[512];
-    sprintf(url, "/%s/users", Config::GetServerlistPath().c_str());
+    sprintf(url, "/%s/users", app.config_serverlist_path.c_str());
     Logger::Log(LOG_INFO, "Attempting user authentication (%s)", url);
 
     Json::Value data(Json::objectValue);
@@ -167,7 +170,7 @@ int UserAuth::resolve(std::string user_token, std::string &user_nick, int client
 
     Http::Response resp;
     int result_code = Http::Request(Http::METHOD_GET,
-                                    Config::GetServerlistHostC(), url, "application/json",
+                                    app.config_serverlist_host, url, "application/json",
                                     json_str.c_str(), &resp);
 
     // 200 means success!

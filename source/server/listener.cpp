@@ -33,6 +33,8 @@ along with Foobar. If not, see <http://www.gnu.org/licenses/>.
 #include <sstream>
 #include <stdio.h>
 
+#include "Poco/Util/Application.h"
+
 #ifdef __GNUC__
 
 #include <stdlib.h>
@@ -87,6 +89,8 @@ bool Listener::WaitUntilReady() {
 }
 
 void Listener::threadstart() {
+    auto &app = Poco::Util::Application::instance();
+
     Logger::Log(LOG_DEBUG, "Listerer thread starting");
     //here we start
     SWBaseSocket::SWBaseError error;
@@ -166,7 +170,7 @@ void Listener::threadstart() {
             std::string motd_str;
             {
                 std::vector<std::string> lines;
-                if (!Utils::ReadLinesFromFile(Config::getMOTDFile(), lines))
+                if (!Utils::ReadLinesFromFile(app.config_motdfile, lines))
                 {
                     for (const auto& line : lines)
                         motd_str += line + "\n";
@@ -176,11 +180,11 @@ void Listener::threadstart() {
             Logger::Log(LOG_DEBUG, "Listener sending server settings");
             RoRnet::ServerInfo settings;
             memset(&settings, 0, sizeof(RoRnet::ServerInfo));
-            settings.has_password = !Config::getPublicPassword().empty();
+            settings.has_password = !app.config_public_password.empty();
             strncpy(settings.info, motd_str.c_str(), motd_str.size());
             strncpy(settings.protocolversion, RORNET_VERSION, strlen(RORNET_VERSION));
-            strncpy(settings.servername, Config::getServerName().c_str(), Config::getServerName().size());
-            strncpy(settings.terrain, Config::getTerrainName().c_str(), Config::getTerrainName().size());
+            strncpy(settings.servername, app.config_server_name.c_str(), app.config_server_name.size());
+            strncpy(settings.terrain, app.config_terrain_name.c_str(), app.config_terrain_name.size());
 
             if (Messaging::SendMessage(ts, RoRnet::MSG2_HELLO, 0, 0, (unsigned int) sizeof(RoRnet::ServerInfo),
                                        (char *) &settings))
@@ -211,11 +215,11 @@ void Listener::threadstart() {
             user->authstatus = m_sequencer->AuthorizeNick(std::string(user->usertoken, 40), nickname);
             strncpy(user->username, nickname.c_str(), RORNET_MAX_USERNAME_LEN - 1);
 
-            if (Config::isPublic()) {
+            if (app.config_server_mode == "INET") {
                 Logger::Log(LOG_DEBUG, "password login: %s == %s?",
-                            Config::getPublicPassword().c_str(),
+                            app.config_public_password.c_str(),
                             std::string(user->serverpassword, 40).c_str());
-                if (strncmp(Config::getPublicPassword().c_str(), user->serverpassword, 40)) {
+                if (strncmp(app.config_public_password.c_str(), user->serverpassword, 40)) {
                     Messaging::SendMessage(ts, RoRnet::MSG2_WRONG_PW, 0, 0, 0, 0);
                     throw std::runtime_error("ERROR Listener: wrong password");
                 }

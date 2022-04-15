@@ -20,152 +20,48 @@ along with Foobar. If not, see <http://www.gnu.org/licenses/>.
 
 #pragma once
 
-#include "UnicodeStrings.h"
+#ifdef _WIN32
+#define config_RESOURCE_DIR ""
+#else // _WIN32 ~ trailing slash important
+#define config_RESOURCE_DIR "/usr/share/rorserver/"
+#endif // _WIN32
 
-// server modes
-enum ServerType {
-    SERVER_LAN = 0,
-    SERVER_INET,
-    SERVER_AUTO
-};
+// INET, LAN, AUTO
 
-namespace Config {
+#define config_server_mode config().getString("mode", "LAN")
 
-//! runs a check that all the required fields are present
-    bool checkConfig();
+#define config_server_name config().getString("name")
+#define config_terrain_name config().getString("terrain", "any")
+#define config_public_password config().getString("password")
+#define config_ip_addr config().getString("ip", "0.0.0.0")
+#define config_scriptname config().getString("scriptfile")
+#define config_authfile config().getString("authfile", "server.auth")
+#define config_motdfile config().getString("motdfile", "server.motd")
+#define config_rulesfile config().getString("rulesfile", "server.rules")
+#define config_blacklistfile config().getString("blacklistfile", "server.blacklist")
+#define config_owner config().getString("owner")
+#define config_website config().getString("website")
+#define config_irc config().getString("irc")
+#define config_voip config().getString("voip")
+#define config_serverlist_host config().getString("serverlist-host", "api.rigsofrods.org")
+#define config_serverlist_path config().getString("serverlist-path", "")
+#define config_resourcedir config().getString("resourcedir", RESOURCE_DIR)
 
-    bool ProcessArgs(int argc, char *argv[]);
+#define config_listen_port config().getInt("port", 14000)
+#define config_max_clients config().getInt("slots", 16)
+#define config_heartbeat_retry_count config().getInt("heartbeat-retry-count", 5)
+#define config_heartbeat_retry_seconds config().getInt("heartbeat-retry-seconds", 15)
+#define config_heartbeat_interval_sec config().getInt("heartbeat-interval", 60)
 
-    void ShowHelp();
+#define config_print_stats config().getBool("printstats")
+#define config_foreground config().getBool("foreground")
 
-    void ShowVersion();
+// Vehicle spawn limits
+#define config_max_vehicles config().getInt("vehiclelimit", 0)
+#define config_spawn_interval_sec config().getInt("vehicle-spawn-interval", 0)
+#define config_max_spawn_rate config().getInt("vehicle-max-spawn-rate", 0)
 
-//! checks if a password has been set for server access
-    bool isPublic();
-
-//! getter function
-//!@{
-    unsigned int getMaxClients();
-
-    const std::string &getServerName();
-
-    const std::string &getTerrainName();
-
-    const std::string &getPublicPassword();
-
-    const std::string &getIPAddr();
-
-    const std::string &getScriptName();
-
-    unsigned int getListenPort();
-
-    ServerType getServerMode();
-
-    bool getPrintStats();
-
-    bool getEnableScripting();
-
-    bool getForeground();
-
-    const std::string &getResourceDir();
-
-    const std::string &getAuthFile();
-
-    const std::string &getMOTDFile();
-
-    const std::string &getRulesFile();
-
-    const std::string &getBlacklistFile();
-
-    const std::string &getOwner();
-
-    const std::string &getWebsite();
-
-    const std::string &getIRC();
-
-    const std::string &getVoIP();
-
-    const std::string &GetServerlistHost();
-
-    const char *GetServerlistHostC();
-
-    const std::string &GetServerlistPath();
-
-    unsigned int GetHeartbeatRetryCount();
-
-    unsigned int GetHeartbeatRetrySeconds();
-
-    unsigned int GetHeartbeatIntervalSec();
-
-    bool GetShowHelp();
-
-    bool GetShowVersion();
-
-    // Vehicle spawn limits
-    unsigned int getMaxVehicles();
-    int getSpawnIntervalSec();
-    int getMaxSpawnRate();
-
-    // Spam filter
-    int getSpamFilterMsgIntervalSec();
-    int getSpamFilterMsgCount();
-    int getSpamFilterGagDurationSec();
-//!@}
-
-//! setter functions
-//!@{
-    bool setMaxClients(unsigned int num);
-
-    bool setServerName(const std::string &name);
-
-    bool setScriptName(const std::string &name);
-
-    bool setTerrain(const std::string &name);
-
-    bool setPublicPass(const std::string &name);
-
-    bool setIPAddr(const std::string &name);
-
-    bool setListenPort(unsigned int port);
-
-    bool setServerMode(ServerType mode);
-
-    void setPrintStats(bool value);
-
-    void setHeartbeatIntervalSec(unsigned sec);
-
-    void setForeground(bool value);
-
-    void LoadConfigFile(const std::string &filename);
-
-    void setResourceDir(std::string dir);
-
-    void setAuthFile(const std::string &file);
-
-    void setMOTDFile(const std::string &file);
-
-    void setRulesFile(const std::string &rulesFile);
-
-    void setBlacklistFile(const std::string &blacklistFile);
-
-    void setOwner(const std::string &owner);
-
-    void setWebsite(const std::string &website);
-
-    void setIRC(const std::string &irc);
-
-    void setVoIP(const std::string &voip);
-
-    // Vehicle spawn limits
-    void setMaxVehicles(unsigned int num);
-    void setSpawnIntervalSec(int sec);
-    void setMaxSpawnRate(int num);
-
-    // Spam filter
-    void setSpamFilterMsgIntervalSec(int sec);
-    void setSpamFilterMsgCount(int count);
-    void setSpamFilterGagDurationSec(int sec);
-//!@}
-
-} // namespace Config
-
+// 0 disables spamfilter
+#define config_spamfilter_msg_interval_sec config().getInt("spamfilter-msg-interval", 0)
+#define config_spamfilter_msg_count config().getInt("spamfilter-msg-count", 0)
+#define config_spamfilter_gag_duration_sec config().getInt("spamfilter-gag-duration", 0)

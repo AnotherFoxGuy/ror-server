@@ -26,6 +26,8 @@ along with Foobar. If not, see <http://www.gnu.org/licenses/>.
 #include "http.h"
 #include "json/json.h"
 
+#include "Poco/Util/Application.h"
+
 #include <assert.h>
 
 namespace MasterServer {
@@ -35,16 +37,18 @@ namespace MasterServer {
             m_is_registered(false) {}
 
     bool Client::Register() {
-        Json::Value data(Json::objectValue);
-        data["ip"] = Config::getIPAddr();
-        data["port"] = Config::getListenPort();
-        data["name"] = Config::getServerName();
-        data["terrain-name"] = Config::getTerrainName();
-        data["max-clients"] = Config::getMaxClients();
-        data["version"] = RORNET_VERSION;
-        data["use-password"] = Config::isPublic();
+        auto &app = Poco::Util::Application::instance();
 
-        m_server_path = "/" + Config::GetServerlistPath() + "/server-list";
+        Json::Value data(Json::objectValue);
+        data["ip"] = app.config_ip_addr;
+        data["port"] = app.config_listen_port;
+        data["name"] = app.config_server_name;
+        data["terrain-name"] = app.config_terrain_name;
+        data["max-clients"] = app.config_max_vehicles;
+        data["version"] = RORNET_VERSION;
+        data["use-password"] = app.config_public_password.empty();
+
+        m_server_path = "/" + app.config_serverlist_path + "/server-list";
 
         Logger::Log(LOG_INFO, "Attempting to register on serverlist (%s)", m_server_path.c_str());
         Http::Response response;
@@ -118,22 +122,24 @@ namespace MasterServer {
 
 // Helper
     int Client::HttpRequest(const char *method, const char *payload, Http::Response *out_response) {
-        return Http::Request(method, Config::GetServerlistHostC(), m_server_path.c_str(), "application/json", payload,
+        auto &app = Poco::Util::Application::instance();
+        return Http::Request(method, app.config_serverlist_host, m_server_path.c_str(), "application/json", payload,
                              out_response);
     }
 
     bool RetrievePublicIp() {
         char url[300] = "";
-        sprintf(url, "/%s/get-public-ip", Config::GetServerlistPath().c_str());
+        auto &app = Poco::Util::Application::instance();
+        sprintf(url, "/%s/get-public-ip", app.config_serverlist_path.c_str());
 
         Http::Response response;
         int result_code = Http::Request(Http::METHOD_GET,
-                                        Config::GetServerlistHostC(), url, "application/json", "", &response);
+                                        app.config_serverlist_host, url, "application/json", "", &response);
         if (result_code < 0) {
             Logger::Log(LOG_ERROR, "Failed to retrieve public IP address");
             return false;
         }
-        Config::setIPAddr(response.GetBody());
+        app.config().setString("ip", response.GetBody());
         return true;
     }
 

@@ -38,6 +38,8 @@ along with Foobar. If not, see <http://www.gnu.org/licenses/>.
 #include <iostream>
 #include <stdexcept>
 #include <sstream>
+#include "Poco/Util/Application.h"
+
 
 #ifdef __GNUC__
 
@@ -80,8 +82,9 @@ void Client::Disconnect() {
 
 bool Client::CheckSpawnRate()
 {
-    std::chrono::seconds spawn_interval(Config::getSpawnIntervalSec());
-    if (spawn_interval.count() == 0 || Config::getMaxSpawnRate() == 0) {
+    auto &app = Poco::Util::Application::instance();
+    std::chrono::seconds spawn_interval(app.config_spawn_interval_sec);
+    if (spawn_interval.count() == 0 || app.config_max_spawn_rate == 0) {
         return true; // Spawn rate not limited
     }
 
@@ -99,18 +102,18 @@ bool Client::CheckSpawnRate()
     }
 
     // Evaluate current rate
-    float rate_f = (float)rate / (float)Config::getMaxSpawnRate();
+    float rate_f = (float)rate / (float)app.config_max_spawn_rate;
     if (rate_f > 0.7) {
         char msg[400];
         snprintf(msg, 400, "Do not spawn more than %d vehicles in %d seconds. Already spawned %d",
-            Config::getMaxSpawnRate(), Config::getSpawnIntervalSec(), rate);
+                 app.config_max_spawn_rate, app.config_spawn_interval_sec, rate);
         m_sequencer->serverSay(msg, this->user.uniqueid, FROM_SERVER);
     }
 
     // Add current time
     m_stream_reg_timestamps.push_back(std::chrono::system_clock::now());
 
-    return rate <= Config::getMaxSpawnRate();
+    return rate <= app.config_max_spawn_rate;
 }
 
 std::string Client::GetIpAddress() {
@@ -160,7 +163,8 @@ Sequencer::Sequencer() :
  * Initialize, needs to be called before the class is used
  */
 void Sequencer::Initialize() {
-    m_clients.reserve(Config::getMaxClients());
+    auto &app = Poco::Util::Application::instance();
+    m_clients.reserve(app.config_max_clients);
 
 #ifdef WITH_ANGELSCRIPT
     if (Config::getEnableScripting()) {
@@ -171,7 +175,7 @@ void Sequencer::Initialize() {
 
     pthread_create(&m_killer_thread, NULL, LaunchKillerThread, this);
 
-    m_auth_resolver = new UserAuth(Config::getAuthFile());
+    m_auth_resolver = new UserAuth(app.config_authfile);
 
     m_blacklist.LoadBlacklistFromFile();
 }
@@ -243,6 +247,7 @@ int Sequencer::GetFreePlayerColour() {
 
 //this is called by the Listener thread
 void Sequencer::createClient(SWInetSocket *sock, RoRnet::UserInfo user) {
+    auto &app = Poco::Util::Application::instance();
     //we have a confirmed client that wants to play
     //try to find a place for him
     Logger::Log(LOG_DEBUG, "got instance in createClient()");
@@ -260,7 +265,7 @@ void Sequencer::createClient(SWInetSocket *sock, RoRnet::UserInfo user) {
 
     // check if server is full
     Logger::Log(LOG_DEBUG, "searching free slot for new client...");
-    if (m_clients.size() >= (Config::getMaxClients() + m_bot_count)) {
+    if (m_clients.size() >= (app.config_max_clients + m_bot_count)) {
         Logger::Log(LOG_WARN, "join request from '%s' on full server: rejecting!",
                     Str::SanitizeUtf8(user.username).c_str());
         // set a low time out because we don't want to cause a back up of
@@ -507,8 +512,9 @@ void Sequencer::enableFlow(int uid) {
 
 //this is called from the listener thread initial handshake
 int Sequencer::sendMOTD(int uid) {
+    auto &app = Poco::Util::Application::instance();
     std::vector<std::string> lines;
-    int res = Utils::ReadLinesFromFile(Config::getMOTDFile(), lines);
+    int res = Utils::ReadLinesFromFile(app.config_motdfile, lines);
     if (res)
         return res;
 
@@ -756,6 +762,7 @@ void Sequencer::streamDebug() {
 //this is called by the receivers threads, like crazy & concurrently
 void Sequencer::queueMessage(int uid, int type, unsigned int streamid, char *data, unsigned int len) {
     MutexLocker scoped_lock(m_clients_mutex);
+    auto &app = Poco::Util::Application::instance();
 
     Client *client = this->FindClientById(static_cast<unsigned int>(uid));
     if (client == nullptr) {
@@ -793,7 +800,7 @@ void Sequencer::queueMessage(int uid, int type, unsigned int streamid, char *dat
         }
     } else if (type == RoRnet::MSG2_STREAM_REGISTER) {
         RoRnet::StreamRegister *reg = (RoRnet::StreamRegister *) data;
-        if (client->streams.size() >= Config::getMaxVehicles() + NON_VEHICLE_STREAMS) {
+        if (client->streams.size() >= app.config_max_vehicles + NON_VEHICLE_STREAMS) {
             // This user has too many vehicles, we drop the stream and then disconnect the user
             Logger::Log(LOG_INFO, "%s(%d) has too many streams. Stream dropped, user kicked.",
                         Str::SanitizeUtf8(client->user.username).c_str(), client->user.uniqueid);
@@ -805,7 +812,7 @@ void Sequencer::queueMessage(int uid, int type, unsigned int streamid, char *dat
             // broadcast a general message that this user was auto-kicked
             char sayMsg[128] = "";
             sprintf(sayMsg, "%s was auto-kicked for having too many vehicles (limit: %d)",
-                    Str::SanitizeUtf8(client->user.username).c_str(), Config::getMaxVehicles());
+                    Str::SanitizeUtf8(client->user.username).c_str(), app.config_max_vehicles);
             serverSay(sayMsg, TO_ALL, FROM_SERVER);
 
             QueueClientForDisconnect(client->user.uniqueid, "You have too many vehicles. Please rejoin.", false);
@@ -818,12 +825,12 @@ void Sequencer::queueMessage(int uid, int type, unsigned int streamid, char *dat
             // broadcast a general message that this user was auto-kicked
             char sayMsg[300] = "";
             snprintf(sayMsg, 300, "%s was auto-kicked for spawning vehicles too fast (limit: %d spawns per %d sec)",
-                    client->GetUsername().c_str(), Config::getMaxSpawnRate(), Config::getSpawnIntervalSec());
+                    client->GetUsername().c_str(), app.config_max_spawn_rate, app.config_spawn_interval_sec);
             serverSay(sayMsg, TO_ALL, FROM_SERVER);
 
             // disconnect the user with a message
             snprintf(sayMsg, 300, "You were auto-kicked for spawning vehicles too fast (limit: %d spawns per %d sec). Please rejoin.",
-                    Config::getMaxSpawnRate(), Config::getSpawnIntervalSec());
+                     app.config_max_spawn_rate, app.config_spawn_interval_sec);
             QueueClientForDisconnect(client->user.uniqueid, sayMsg, false);
             publishMode = BROADCAST_BLOCK; // drop
         } else if (reg->type == STREAM_REG_TYPE_VEHICLE && !Utils::isValidVehicleFileName(reg->name)) {
@@ -882,7 +889,7 @@ void Sequencer::queueMessage(int uid, int type, unsigned int streamid, char *dat
                                                    std::string(reg->name), std::string());
 
                 // Notify the user about the vehicle limit
-                if ((client->streams.size() >= Config::getMaxVehicles() + NON_VEHICLE_STREAMS - 3) &&
+                if ((client->streams.size() >= app.config_max_vehicles + NON_VEHICLE_STREAMS - 3) &&
                     (client->streams.size() > NON_VEHICLE_STREAMS)) {
                     // we start warning the user as soon as he has only 3 vehicles left before he will get kicked (that's why we do minus three in the 'if' statement above).
                     char sayMsg[128] = "";
@@ -890,10 +897,10 @@ void Sequencer::queueMessage(int uid, int type, unsigned int streamid, char *dat
                     // special case if the user has exactly 1 vehicle
                     if (client->streams.size() == NON_VEHICLE_STREAMS + 1)
                         sprintf(sayMsg, "You now have 1 vehicle. The vehicle limit on this server is set to %d.",
-                                Config::getMaxVehicles());
+                                app.config_max_vehicles);
                     else
                         sprintf(sayMsg, "You now have %lu vehicles. The vehicle limit on this server is set to %d.",
-                                (client->streams.size() - NON_VEHICLE_STREAMS), Config::getMaxVehicles());
+                                (client->streams.size() - NON_VEHICLE_STREAMS), app.config_max_vehicles);
 
                     serverSay(sayMsg, client->user.uniqueid, FROM_SERVER);
                 }
@@ -1069,7 +1076,7 @@ void Sequencer::queueMessage(int uid, int type, unsigned int streamid, char *dat
             }
         } else if (str == "!vehiclelimit") {
             char sayMsg[128] = "";
-            sprintf(sayMsg, "The vehicle-limit on this server is set on %d", Config::getMaxVehicles());
+            sprintf(sayMsg, "The vehicle-limit on this server is set on %d", app.config_max_vehicles);
             serverSay(sayMsg, uid, FROM_SERVER);
         } else if (str.substr(0, 5) == "!say ") {
             if (client->user.authstatus & RoRnet::AUTH_MOD || client->user.authstatus & RoRnet::AUTH_ADMIN) {
@@ -1091,33 +1098,33 @@ void Sequencer::queueMessage(int uid, int type, unsigned int streamid, char *dat
                 serverSay(std::string("You are not authorized to use this command!"), uid);
             }
         } else if (str == "!website" || str == "!www") {
-            if (!Config::getWebsite().empty()) {
+            if (!app.config_website.empty()) {
                 char sayMsg[256] = "";
-                sprintf(sayMsg, "Further information can be found online at %s", Config::getWebsite().c_str());
+                sprintf(sayMsg, "Further information can be found online at %s", app.config_website.c_str());
                 serverSay(sayMsg, uid, FROM_SERVER);
             }
         } else if (str == "!irc") {
-            if (!Config::getIRC().empty()) {
+            if (!app.config_irc.empty()) {
                 char sayMsg[256] = "";
-                sprintf(sayMsg, "IRC: %s", Config::getIRC().c_str());
+                sprintf(sayMsg, "IRC: %s", app.config_irc.c_str());
                 serverSay(sayMsg, uid, FROM_SERVER);
             }
         } else if (str == "!owner") {
-            if (!Config::getOwner().empty()) {
+            if (!app.config_owner.empty()) {
                 char sayMsg[256] = "";
-                sprintf(sayMsg, "This server is run by %s", Config::getOwner().c_str());
+                sprintf(sayMsg, "This server is run by %s", app.config_owner.c_str());
                 serverSay(sayMsg, uid, FROM_SERVER);
             }
         } else if (str == "!voip") {
-            if (!Config::getVoIP().empty()) {
+            if (!app.config_voip.empty()) {
                 char sayMsg[256] = "";
-                sprintf(sayMsg, "This server's official VoIP: %s", Config::getVoIP().c_str());
+                sprintf(sayMsg, "This server's official VoIP: %s", app.config_voip.c_str());
                 serverSay(sayMsg, uid, FROM_SERVER);
             }
         } else if (str == "!rules") {
-            if (!Config::getRulesFile().empty()) {
+            if (!app.config_rulesfile.empty()) {
                 std::vector<std::string> lines;
-                int res = Utils::ReadLinesFromFile(Config::getRulesFile(), lines);
+                int res = Utils::ReadLinesFromFile(app.config_rulesfile, lines);
                 if (!res) {
                     std::vector<std::string>::iterator it;
                     for (it = lines.begin(); it != lines.end(); it++) {
@@ -1238,7 +1245,8 @@ void Sequencer::UpdateMinuteStats() {
 
 // clients_mutex needs to be locked wen calling this method
 void Sequencer::printStats() {
-    if (!Config::getPrintStats()) {
+    auto &app = Poco::Util::Application::instance();
+    if (!app.config_print_stats) {
         return;
     }
 

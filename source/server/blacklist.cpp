@@ -27,6 +27,8 @@ along with Rigs of Rods Server. If not, see <http://www.gnu.org/licenses/>.
 #include <fstream>
 #include <json/json.h>
 
+#include "Poco/Util/Application.h"
+
 Blacklist::Blacklist(Sequencer* database)
     : m_database(database)
 {
@@ -34,13 +36,15 @@ Blacklist::Blacklist(Sequencer* database)
 
 void Blacklist::SaveBlacklistToFile()
 {
+    auto &app = Poco::Util::Application::instance();
+    auto file = app.config_blacklistfile;
     std::ofstream f;
-    f.open(Config::getBlacklistFile(), std::ios::out);
+    f.open(file, std::ios::out);
     if (!f.is_open() || !f.good())
     {
         Logger::Log(LogLevel::LOG_WARN,
             "Couldn't open the local blacklist file ('%s'). Bans were not saved.",
-            Config::getBlacklistFile().c_str());
+                    file.c_str());
         return;
     }
 
@@ -67,13 +71,15 @@ void Blacklist::SaveBlacklistToFile()
 
 bool Blacklist::LoadBlacklistFromFile()
 {
+    auto &app = Poco::Util::Application::instance();
+    auto file = app.config_blacklistfile;
     std::ifstream f;
-    f.open(Config::getBlacklistFile(), std::ios::in);
+    f.open(file, std::ios::in);
     if (!f.is_open() || !f.good())
     {
         Logger::Log(LogLevel::LOG_WARN,
                     "Couldn't open the local blacklist file ('%s'). No bans were loaded.",
-                    Config::getBlacklistFile().c_str());
+                    file.c_str());
         return false;
     }
 
@@ -82,7 +88,7 @@ bool Blacklist::LoadBlacklistFromFile()
         f.close();
         Logger::Log(LogLevel::LOG_WARN,
                     "Local blacklist file ('%s') is empty.",
-                    Config::getBlacklistFile().c_str());
+                    file.c_str());
         return false;
     }
 

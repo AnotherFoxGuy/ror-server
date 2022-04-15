@@ -24,21 +24,25 @@ along with Rigs of Rods Server. If not, see <http://www.gnu.org/licenses/>.
 #include "logger.h"
 #include "sequencer.h"
 
+#include "Poco/Util/Application.h"
+
 // --------------------------------
 // Static functions
 
 bool SpamFilter::IsActive()
 {
-    return (Config::getSpamFilterMsgIntervalSec() > 0) &&
-           (Config::getSpamFilterMsgCount() > 0);
+    auto &app = Poco::Util::Application::instance();
+    return (app.config_spamfilter_msg_interval_sec > 0) &&
+           (app.config_spamfilter_msg_count > 0);
 }
 
 void SpamFilter::CheckConfig()
 {
+    auto &app = Poco::Util::Application::instance();
     if (SpamFilter::IsActive()) {
         Logger::Log(LOG_INFO, "spam filter: active, %d msg/%d sec -> %d sec gag",
-            Config::getSpamFilterMsgCount(), Config::getSpamFilterMsgIntervalSec(),
-            Config::getSpamFilterGagDurationSec());
+            app.config_spamfilter_msg_count, app.config_spamfilter_msg_interval_sec,
+            app.config_spamfilter_gag_duration_sec);
     } else {
         Logger::Log(LOG_INFO, "spam filter: disabled");
     }
@@ -53,8 +57,9 @@ SpamFilter::SpamFilter(Sequencer* seq, Client* c)
 {}
 
 bool SpamFilter::CheckForSpam(std::string const& msg) {
+    auto &app = Poco::Util::Application::instance();
     const TimePoint now = std::chrono::system_clock::now();
-    const std::chrono::seconds cache_expiry(Config::getSpamFilterMsgIntervalSec());
+    const std::chrono::seconds cache_expiry(app.config_spamfilter_msg_interval_sec);
 
     // Count message occurences in cache
     auto itor = m_msg_cache.begin();
@@ -74,12 +79,12 @@ bool SpamFilter::CheckForSpam(std::string const& msg) {
     m_msg_cache.push_back(CacheMsg(now, msg));
 
     // Update gag
-    if (num_occurs > Config::getSpamFilterMsgCount()) {
+    if (num_occurs > app.config_spamfilter_msg_count) {
         if (!m_gagged) {
             m_gag_expiry = now;
         }
         m_gagged = true;
-        m_gag_expiry += std::chrono::seconds(Config::getSpamFilterGagDurationSec());
+        m_gag_expiry += std::chrono::seconds(app.config_spamfilter_gag_duration_sec);
     } else if (m_gagged && m_gag_expiry < now) {
         m_gagged = false;
         m_sequencer->serverSay("Your gag has expired. Chat nicely!", m_client->GetUserId(), FROM_SERVER);
