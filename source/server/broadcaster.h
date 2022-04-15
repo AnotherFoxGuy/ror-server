@@ -21,12 +21,13 @@ along with Foobar. If not, see <http://www.gnu.org/licenses/>.
 #pragma once
 
 #include "rornet.h"
-#include "mutexutils.h"
 #include "prerequisites.h"
 
 #include <atomic>
-#include <pthread.h>
 #include <deque>
+#include <mutex>
+
+#include "Poco/Activity.h"
 
 class SWInetSocket;
 
@@ -39,8 +40,6 @@ struct queue_entry_t {
     unsigned int datalen;
     char data[RORNET_MAX_MESSAGE_LENGTH];
 };
-
-void *StartBroadcasterThread(void *);
 
 class Broadcaster {
     friend void *StartBroadcasterThread(void *);
@@ -60,12 +59,13 @@ public:
     bool IsDroppingPackets() const { return m_is_dropping_packets; }
 
 private:
-    void Thread();
+    void Run();
+
+    Poco::Activity<Broadcaster> _activity;
 
     Sequencer *m_sequencer;
-    pthread_t m_thread;
-    Mutex m_queue_mutex;
-    Condition m_queue_cond;
+    std::thread m_thread;
+    std::mutex m_queue_mutex;
     Client* m_client;
     std::atomic<bool> m_keep_running;
     bool m_is_dropping_packets;

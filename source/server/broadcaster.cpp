@@ -20,7 +20,6 @@ along with Foobar. If not, see <http://www.gnu.org/licenses/>.
 
 #include "broadcaster.h"
 
-#include "logger.h"
 #include "messaging.h"
 #include "SocketW.h"
 #include "sequencer.h"
@@ -54,21 +53,20 @@ void Broadcaster::Start(Client* client) {
 }
 
 void Broadcaster::Stop() {
-    const bool was_running = m_keep_running.exchange(false);
-    if (was_running) {
+    auto &app = Poco::Util::Application::instance();
+    app.logger().trace( "Started broadcaster thread %u owned by client_id %d", ThreadID::getID(), m_client->GetUserId());
         m_queue_cond.signal();
         pthread_join(m_thread, nullptr);
     }
 }
 
 void Broadcaster::Thread() {
-    Logger::Log(LOG_DEBUG, "Started broadcaster thread %u owned by client_id %d", ThreadID::getID(), m_client->GetUserId());
     bool socket_error = false;
     while (true) {
         queue_entry_t msg;
         // define a new scope and use a scope lock
         {
-            MutexLocker scoped_lock(m_queue_mutex);
+            const std::lock_guard<std::mutex> scoped_lock(m_queue_mutex);
             while (m_msg_queue.empty() && m_keep_running.load()) {
                 m_queue_mutex.wait(m_queue_cond);
             }
@@ -96,7 +94,7 @@ void Broadcaster::Thread() {
     }
 
     if (!socket_error) {
-        MutexLocker scoped_lock(m_queue_mutex);
+        const std::lock_guard<std::mutex> scoped_lock(m_queue_mutex);
         for (const auto& msg : m_msg_queue) {
             if (msg.type != RoRnet::MSG2_STREAM_DATA && msg.type != RoRnet::MSG2_STREAM_DATA_DISCARDABLE) {
                 Messaging::SendMessage(m_client->GetSocket(), msg.type, msg.uid, msg.streamid, msg.datalen, msg.data);
@@ -104,7 +102,7 @@ void Broadcaster::Thread() {
         }
     }
 
-    Logger::Log(LOG_DEBUG, "Broadcaster thread %u (client_id %d) exits", ThreadID::getID(), m_client->GetUserId());
+    app.logger().trace( "Broadcaster thread %u (client_id %d) exits", ThreadID::getID(), m_client->GetUserId());
 }
 
 //this is called all the way from the receiver threads, we should process this swiftly
@@ -119,7 +117,7 @@ void Broadcaster::QueueMessage(int type, int uid, unsigned int streamid, unsigne
     memcpy(msg.data, data, len);
 
     {
-        MutexLocker scoped_lock(m_queue_mutex);
+        const std::lock_guard<std::mutex> scoped_lock(m_queue_mutex);
         if (m_msg_queue.empty()) {
             m_packet_drop_counter = 0;
             m_is_dropping_packets = (++m_packet_good_counter > 3) ? false : m_is_dropping_packets;

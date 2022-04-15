@@ -20,7 +20,6 @@ along with Rigs of Rods Server. If not, see <http://www.gnu.org/licenses/>.
 
 #include "blacklist.h"
 #include "config.h"
-#include "logger.h"
 #include "sequencer.h"
 #include "utils.h"
 
@@ -42,9 +41,7 @@ void Blacklist::SaveBlacklistToFile()
     f.open(file, std::ios::out);
     if (!f.is_open() || !f.good())
     {
-        Logger::Log(LogLevel::LOG_WARN,
-            "Couldn't open the local blacklist file ('%s'). Bans were not saved.",
-                    file.c_str());
+        app.logger().warning("Couldn't open the local blacklist file ('%s'). Bans were not saved.",file);
         return;
     }
 
@@ -77,7 +74,7 @@ bool Blacklist::LoadBlacklistFromFile()
     f.open(file, std::ios::in);
     if (!f.is_open() || !f.good())
     {
-        Logger::Log(LogLevel::LOG_WARN,
+        app.logger().warning(
                     "Couldn't open the local blacklist file ('%s'). No bans were loaded.",
                     file.c_str());
         return false;
@@ -86,7 +83,7 @@ bool Blacklist::LoadBlacklistFromFile()
     if (Utils::IsEmptyFile(f))
     {
         f.close();
-        Logger::Log(LogLevel::LOG_WARN,
+        app.logger().warning(
                     "Local blacklist file ('%s') is empty.",
                     file.c_str());
         return false;
@@ -97,7 +94,7 @@ bool Blacklist::LoadBlacklistFromFile()
     j_reader.parse(f, j_doc);
     if (!j_reader.good())
     {
-        Logger::Log(LogLevel::LOG_WARN,
+        app.logger().warning(
                     "Couldn't parse blacklist file, messages:\n%s",
                     j_reader.getFormattedErrorMessages());
         return false;

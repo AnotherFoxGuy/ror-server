@@ -21,7 +21,6 @@ along with Foobar. If not, see <http://www.gnu.org/licenses/>.
 #include "http.h"
 
 #include "utils.h"
-#include "logger.h"
 #include "SocketW.h"
 
 #include <assert.h>
@@ -30,6 +29,8 @@ along with Foobar. If not, see <http://www.gnu.org/licenses/>.
 #include <sstream>
 #include <iostream>
 #include <cstring>
+
+#include "Poco/Util/Application.h"
 
 namespace Http {
 
@@ -47,10 +48,11 @@ namespace Http {
             std::string payload) {
         method = method.empty() ? METHOD_GET : method;
 
+        auto &app = Poco::Util::Application::instance();
         SWInetSocket socket;
         SWInetSocket::SWBaseError result;
         if (!socket.connect(80, host, &result) || (result != SWInetSocket::ok)) {
-            Logger::Log(LOG_ERROR,
+            app.logger().error(
                         "Could not process HTTP %s request %s%s failed, error: ",
                         method, host, url, result.get_error().c_str());
             return "";
@@ -60,7 +62,7 @@ namespace Http {
             content_type + "\r\nContent-Length: " + std::to_string(payload.length()) + "\r\n\r\n" + payload;
 
         if (socket.fsendmsg(query, &result) < 0) {
-            Logger::Log(LOG_ERROR,
+            app.logger().error(
                         "Could not process HTTP %s request %s%s failed, error: ",
                         method, host, url, result.get_error().c_str());
             return "";
@@ -68,7 +70,7 @@ namespace Http {
 
         std::string response = socket.recvmsg(5000, &result);
         if (result != SWInetSocket::ok) {
-            Logger::Log(LOG_ERROR,
+            app.logger().error(
                         "Could not process HTTP %s request %s%s failed, invalid response length, error message: ",
                         method, host, url, result.get_error().c_str());
             return "";
@@ -119,6 +121,7 @@ namespace Http {
     }
 
     bool Response::FromBuffer(const std::string &message) {
+        auto &app = Poco::Util::Application::instance();
         m_response_code = -1;
         m_headermap.clear();
 
@@ -135,7 +138,7 @@ namespace Http {
         char *tok0 = std::strtok(line, " ");
         char *tok1 = std::strtok(nullptr, " ");
         if (tok0 == nullptr || tok1 == nullptr) {
-            Logger::Log(LOG_ERROR, "Internal: HTTP response has malformed 1st line: \n%s", header[0].c_str());
+            app.logger().error( "Internal: HTTP response has malformed 1st line: \n%s", header[0].c_str());
             return false;
         }
         m_response_code = atoi(tok1);
@@ -153,7 +156,7 @@ namespace Http {
         tmp.clear();
         locHolder = message.find_first_not_of("\r\n", locHolder);
         if (std::string::npos == locHolder) {
-            Logger::Log(LOG_ERROR, "Internal: HTTP message does not appear to contain a body: \n%s", message.c_str());
+            app.logger().error( "Internal: HTTP message does not appear to contain a body: \n%s", message.c_str());
             return false;
         }
 

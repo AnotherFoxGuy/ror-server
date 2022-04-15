@@ -26,7 +26,6 @@ along with Foobar. If not, see <http://www.gnu.org/licenses/>.
 #include "broadcaster.h"
 #include "userauth.h"
 #include "SocketW.h"
-#include "logger.h"
 #include "config.h"
 #include "utils.h"
 #include "ScriptEngine.h"
@@ -38,6 +37,7 @@ along with Foobar. If not, see <http://www.gnu.org/licenses/>.
 #include <iostream>
 #include <stdexcept>
 #include <sstream>
+#include <mutex>
 #include "Poco/Util/Application.h"
 
 
@@ -64,6 +64,7 @@ void Client::StartThreads() {
 }
 
 void Client::Disconnect() {
+    auto &app = Poco::Util::Application::instance();
     // Signal threads to stop and wait for them to finish
     m_broadcaster.Stop();
     m_receiver.Stop();
@@ -72,8 +73,7 @@ void Client::Disconnect() {
     SWBaseSocket::SWBaseError result;
     bool disconnected_ok = m_socket->disconnect(&result);
     if (!disconnected_ok || (result != SWBaseSocket::base_error::ok)) {
-        Logger::Log(
-                LOG_ERROR,
+        app.logger().error(
                 "Internal: Error while disconnecting client - failed to disconnect socket. Message: %s",
                 result.get_error().c_str());
     }
@@ -117,11 +117,11 @@ bool Client::CheckSpawnRate()
 }
 
 std::string Client::GetIpAddress() {
+    auto &app = Poco::Util::Application::instance();
     SWBaseSocket::SWBaseError result;
     std::string ip = m_socket->get_peerAddr(&result);
     if (result != SWBaseSocket::base_error::ok) {
-        Logger::Log(
-                LOG_ERROR,
+        app.logger().error(
                 "Internal: Error while getting client IP address. Message: %s",
                 result.get_error().c_str());
     }
@@ -185,7 +185,8 @@ void Sequencer::Initialize() {
  * this is in place of the destructor.
  */
 void Sequencer::Close() {
-    Logger::Log(LOG_INFO, "closing. disconnecting clients ...");
+    auto &app = Poco::Util::Application::instance();
+    app.logger().information( "closing. disconnecting clients ...");
 
     const char *str = "server shutting down (try to reconnect later!)";
     for (unsigned int i = 0; i < m_clients.size(); i++) {
@@ -194,7 +195,7 @@ void Sequencer::Close() {
         Messaging::SendMessage(client->GetSocket(), RoRnet::MSG2_USER_LEAVE, client->user.uniqueid, 0, strlen(str),
                                str);
     }
-    Logger::Log(LOG_INFO, "all clients disconnected. exiting.");
+    app.logger().information( "all clients disconnected. exiting.");
 
 #ifdef WITH_ANGELSCRIPT
     if (m_script_engine != nullptr) {
@@ -250,23 +251,23 @@ void Sequencer::createClient(SWInetSocket *sock, RoRnet::UserInfo user) {
     auto &app = Poco::Util::Application::instance();
     //we have a confirmed client that wants to play
     //try to find a place for him
-    Logger::Log(LOG_DEBUG, "got instance in createClient()");
+    app.logger().trace( "got instance in createClient()");
 
-    MutexLocker scoped_lock(m_clients_mutex);
+    const std::lock_guard<std::mutex> scoped_lock(m_clients_mutex);
 
 	std::string nick = Str::SanitizeUtf8(user.username);
     // check if banned
     SWBaseSocket::SWBaseError error;
     if (Sequencer::IsBanned(sock->get_peerAddr(&error).c_str())) {
-        Logger::Log(LOG_WARN, "rejected banned client '%s' with IP %s", nick.c_str(), sock->get_peerAddr(&error).c_str());
+        app.logger().warning("rejected banned client '%s' with IP %s", nick.c_str(), sock->get_peerAddr(&error).c_str());
         Messaging::SendMessage(sock, RoRnet::MSG2_BANNED, 0, 0, 0, 0);
         return;
     }
 
     // check if server is full
-    Logger::Log(LOG_DEBUG, "searching free slot for new client...");
+    app.logger().trace( "searching free slot for new client...");
     if (m_clients.size() >= (app.config_max_clients + m_bot_count)) {
-        Logger::Log(LOG_WARN, "join request from '%s' on full server: rejecting!",
+        app.logger().warning("join request from '%s' on full server: rejecting!",
                     Str::SanitizeUtf8(user.username).c_str());
         // set a low time out because we don't want to cause a back up of
         // connecting clients
@@ -281,7 +282,7 @@ void Sequencer::createClient(SWInetSocket *sock, RoRnet::UserInfo user) {
         strncpy(user.username, nick.c_str(), RORNET_MAX_USERNAME_LEN - 1);
     }
     if (Sequencer::CheckNickIsUnique(nick)) {
-        Logger::Log(LOG_WARN, std::string("found duplicate nick, getting new one: ") + nick);
+        app.logger().warning(std::string("found duplicate nick, getting new one: ") + nick);
 
         // shorten username so the number will fit (only if its too long already)
         std::string new_nick_base = nick.substr(0, RORNET_MAX_USERNAME_LEN - 4) + "-";
@@ -289,7 +290,7 @@ void Sequencer::createClient(SWInetSocket *sock, RoRnet::UserInfo user) {
         for (int i = 2; i < 99; i++) {
             nick = new_nick_base + std::to_string(i);
             if (!Sequencer::CheckNickIsUnique(nick)) {
-                Logger::Log(LOG_WARN, std::string("New username was composed: ") + nick);
+                app.logger().warning(std::string("New username was composed: ") + nick);
                 strncpy(user.username, nick.c_str(), RORNET_MAX_USERNAME_LEN - 1);
                 break;
             }
@@ -315,7 +316,7 @@ void Sequencer::createClient(SWInetSocket *sock, RoRnet::UserInfo user) {
     else
         sprintf(buf, "New client: %s (%s), with IP %s, using %s %s, without token", user.username, user.language, ip.data(), user.clientname,
                 user.clientversion);
-    Logger::Log(LOG_INFO, Str::SanitizeUtf8(buf));
+    app.logger().information( Str::SanitizeUtf8(buf));
 
     // assign unique userid
     unsigned int client_id = m_free_user_id;
@@ -330,7 +331,7 @@ void Sequencer::createClient(SWInetSocket *sock, RoRnet::UserInfo user) {
     // and one for the broadcaster
     to_add->StartThreads();
 
-    Logger::Log(LOG_VERBOSE, "Sending welcome message to uid %i", client_id);
+    app.logger().trace("Sending welcome message to uid %i", client_id);
     if (Messaging::SendMessage(sock, RoRnet::MSG2_WELCOME, client_id, 0, sizeof(RoRnet::UserInfo),
                                (char *) &to_add->user)) {
         this->QueueClientForDisconnect(client_id, "error sending welcome message");
@@ -357,7 +358,7 @@ void Sequencer::createClient(SWInetSocket *sock, RoRnet::UserInfo user) {
     printStats();
 
     // done!
-    Logger::Log(LOG_VERBOSE, "Sequencer: New client added");
+    app.logger().trace("Sequencer: New client added");
 }
 
 // Only used by scripting
@@ -373,7 +374,7 @@ void Sequencer::broadcastUserInfo(int client_id) {
     memset(info_for_others.usertoken, 0, 40);
     memset(info_for_others.clientGUID, 0, 40);
     { // Lock scope
-        MutexLocker scoped_lock(m_clients_mutex);
+        const std::lock_guard<std::mutex> scoped_lock(m_clients_mutex);
         for (unsigned int i = 0; i < m_clients.size(); i++) {
             m_clients[i]->QueueMessage(RoRnet::MSG2_USER_INFO, info_for_others.uniqueid, 0, sizeof(RoRnet::UserInfo),
                                        (char *) &info_for_others);
@@ -382,7 +383,7 @@ void Sequencer::broadcastUserInfo(int client_id) {
 }
 
 void Sequencer::GetHeartbeatUserList(Json::Value &out_array) {
-    MutexLocker scoped_lock(m_clients_mutex);
+    const std::lock_guard<std::mutex> scoped_lock(m_clients_mutex);
 
     auto itor = m_clients.begin();
     auto endi = m_clients.end();
@@ -402,12 +403,12 @@ void Sequencer::GetHeartbeatUserList(Json::Value &out_array) {
 }
 
 int Sequencer::getNumClients() {
-    MutexLocker scoped_lock(m_clients_mutex);
+    const std::lock_guard<std::mutex> scoped_lock(m_clients_mutex);
     return (int) m_clients.size();
 }
 
 int Sequencer::AuthorizeNick(std::string token, std::string &nickname) {
-    MutexLocker scoped_lock(m_clients_mutex);
+    const std::lock_guard<std::mutex> scoped_lock(m_clients_mutex);
     if (m_auth_resolver == nullptr) {
         return RoRnet::AUTH_NONE;
     }
@@ -415,9 +416,10 @@ int Sequencer::AuthorizeNick(std::string token, std::string &nickname) {
 }
 
 void Sequencer::killerthreadstart() {
-    Logger::Log(LOG_DEBUG, "Killer thread ready");
+    auto &app = Poco::Util::Application::instance();
+    app.logger().trace( "Killer thread ready");
     while (1) {
-        Logger::Log(LOG_DEBUG, "Killer entering cycle");
+        app.logger().trace( "Killer entering cycle");
 
         m_killer_mutex.lock();
         while (m_kill_queue.empty()) {
@@ -429,7 +431,7 @@ void Sequencer::killerthreadstart() {
         m_kill_queue.pop();
         m_killer_mutex.unlock();
 
-        Logger::Log(LOG_DEBUG, "Killer called to kill %s", Str::SanitizeUtf8(to_del->user.username).c_str());
+        app.logger().trace( "Killer called to kill %s", Str::SanitizeUtf8(to_del->user.username).c_str());
         to_del->Disconnect();
 
         delete to_del;
@@ -438,11 +440,12 @@ void Sequencer::killerthreadstart() {
 }
 
 void Sequencer::QueueClientForDisconnect(int uid, const char *errormsg, bool isError /*=true*/, bool doScriptCallback /*= true*/) {
-    MutexLocker scoped_lock(m_clients_mutex);
+    const std::lock_guard<std::mutex> scoped_lock(m_clients_mutex);
+    auto &app = Poco::Util::Application::instance();
 
     Client *client = this->FindClientById(static_cast<unsigned int>(uid));
     if (client == nullptr) {
-        Logger::Log(LOG_DEBUG,
+        app.logger().trace(
             "Sequencer::QueueClientForDisconnect() Internal error, got non-existent user ID: %d"
             "(error message: '%s')", uid, errormsg);
         return;
@@ -481,10 +484,10 @@ void Sequencer::QueueClientForDisconnect(int uid, const char *errormsg, bool isE
 
     //this routine is a potential trouble maker as it can be called from many thread contexts
     //so we use a killer thread
-    Logger::Log(LOG_VERBOSE, "Disconnecting client ID %d: %s", uid, errormsg);
-    Logger::Log(LOG_DEBUG, "adding client to kill queue, size: %d", m_kill_queue.size());
+    app.logger().trace("Disconnecting client ID %d: %s", uid, errormsg);
+    app.logger().trace( "adding client to kill queue, size: %d", m_kill_queue.size());
     {
-        MutexLocker scoped_lock(m_killer_mutex);
+        const std::lock_guard<std::mutex> scoped_lock(m_killer_mutex);
         m_kill_queue.push(client);
     }
     m_killer_cond.signal();
@@ -493,13 +496,13 @@ void Sequencer::QueueClientForDisconnect(int uid, const char *errormsg, bool isE
     if (isError) {
         m_num_disconnects_crash++;
     }
-    Logger::Log(LOG_INFO, "crash statistic: %zu of %zu deletes crashed",
+    app.logger().information( "crash statistic: %zu of %zu deletes crashed",
         m_num_disconnects_crash, m_num_disconnects_total);
 }
 
 //this is called from the listener thread initial handshake
 void Sequencer::enableFlow(int uid) {
-    MutexLocker scoped_lock(m_clients_mutex);
+    const std::lock_guard<std::mutex> scoped_lock(m_clients_mutex);
 
     Client *client = this->FindClientById(static_cast<unsigned int>(uid));
     if (client == nullptr) {
@@ -531,6 +534,7 @@ UserAuth *Sequencer::getUserAuth() {
 
 //this is called from the listener thread initial handshake
 void Sequencer::IntroduceNewClientToAllVehicles(Client *new_client) {
+    auto &app = Poco::Util::Application::instance();
     RoRnet::UserInfo info_for_others = new_client->user;
     memset(info_for_others.usertoken, 0, 40);
     memset(info_for_others.clientGUID, 0, 40);
@@ -549,13 +553,13 @@ void Sequencer::IntroduceNewClientToAllVehicles(Client *new_client) {
             new_client->QueueMessage(RoRnet::MSG2_USER_INFO, client->user.uniqueid, 0, sizeof(RoRnet::UserInfo),
                                      (char *) &info_for_newcomer);
 
-            Logger::Log(LOG_VERBOSE, " * %d streams registered for user %d", m_clients[i]->streams.size(),
+            app.logger().trace(" * %d streams registered for user %d", m_clients[i]->streams.size(),
                         m_clients[i]->user.uniqueid);
 
             auto itor = client->streams.begin();
             auto endi = client->streams.end();
             for (; itor != endi; ++itor) {
-                Logger::Log(LOG_VERBOSE, "sending stream registration %d:%d to user %d", client->user.uniqueid,
+                app.logger().trace("sending stream registration %d:%d to user %d", client->user.uniqueid,
                             itor->first, new_client->user.uniqueid);
                 new_client->QueueMessage(RoRnet::MSG2_STREAM_REGISTER, client->user.uniqueid, itor->first,
                                          sizeof(RoRnet::StreamRegister), (char *) &itor->second);
@@ -624,6 +628,7 @@ void Sequencer::serverSayThreadSave(std::string msg, int uid, int type) {
 }
 
 bool Sequencer::Kick(int kuid, int modUID, const char *msg) {
+    auto &app = Poco::Util::Application::instance();
     Client *kicked_client = this->FindClientById(static_cast<unsigned int>(kuid));
     if (kicked_client == nullptr) {
         return false;
@@ -645,8 +650,7 @@ bool Sequencer::Kick(int kuid, int modUID, const char *msg) {
     sprintf(kickmsg2, "player %s was %s", Str::SanitizeUtf8(kicked_client->user.username).c_str(), kickmsg);
     serverSay(kickmsg2, TO_ALL, FROM_SERVER);
 
-    Logger::Log(
-            LOG_VERBOSE,
+    app.logger().trace(
             "player '%s' kicked by '%s'",
             Str::SanitizeUtf8(kicked_client->user.username).c_str(),
             Str::SanitizeUtf8(mod_client->user.username).c_str());
@@ -661,6 +665,7 @@ void Sequencer::RecordBan(int bid,
     std::string const& by_nickname,
     std::string const& banmsg)
 {
+    auto &app = Poco::Util::Application::instance();
     // construct ban data and add it to the list
     ban_t *b = new ban_t;
     memset(b, 0, sizeof(ban_t));
@@ -676,9 +681,9 @@ void Sequencer::RecordBan(int bid,
     strncpy(b->nickname, nickname.c_str(), /* copy max: */RORNET_MAX_USERNAME_LEN - 1);
     strncpy(b->bannedby_nick, by_nickname.c_str(), /* copy max: */RORNET_MAX_USERNAME_LEN - 1);
 
-    Logger::Log(LOG_DEBUG, "adding ban, size: %u", m_bans.size());
+    app.logger().trace( "adding ban, size: %u", m_bans.size());
     m_bans.push_back(b);
-    Logger::Log(LOG_VERBOSE, "new ban added: '%s' by '%s'", nickname.c_str(), by_nickname.c_str());
+    app.logger().trace("new ban added: '%s' by '%s'", nickname.c_str(), by_nickname.c_str());
 }
 
 bool Sequencer::Ban(int buid, int modUID, const char *msg) {
@@ -700,9 +705,10 @@ bool Sequencer::Ban(int buid, int modUID, const char *msg) {
 }
 
 void Sequencer::SilentBan(int buid, const char *msg, bool doScriptCallback /*= true*/) {
+    auto &app = Poco::Util::Application::instance();
     Client *banned_client = this->FindClientById(static_cast<unsigned int>(buid));
     if (banned_client == nullptr) {
-        Logger::Log(LOG_ERROR, "void Sequencer::ban(%d, %s) --> uid %d not found!", buid, msg, buid);
+        app.logger().error( "void Sequencer::ban(%d, %s) --> uid %d not found!", buid, msg, buid);
         return;
     }
 
@@ -715,11 +721,12 @@ void Sequencer::SilentBan(int buid, const char *msg, bool doScriptCallback /*= t
 }
 
 bool Sequencer::UnBan(int bid) {
+    auto &app = Poco::Util::Application::instance();
     for (unsigned int i = 0; i < m_bans.size(); i++) {
         if (m_bans[i]->bid == bid) {
             m_bans.erase(m_bans.begin() + i);
 			m_blacklist.SaveBlacklistToFile(); // Remove from the blacklist file
-            Logger::Log(LOG_VERBOSE, "ban removed: %d", bid);
+            app.logger().trace("ban removed: %d", bid);
             return true;
         }
     }
@@ -739,12 +746,13 @@ bool Sequencer::IsBanned(const char *ip) {
 }
 
 void Sequencer::streamDebug() {
+    auto &app = Poco::Util::Application::instance();
     for (unsigned int i = 0; i < m_clients.size(); i++) {
         if (m_clients[i]->GetStatus() == Client::STATUS_USED) {
-            Logger::Log(LOG_VERBOSE, " * %d %s (slot %d):", m_clients[i]->user.uniqueid,
+            app.logger().trace(" * %d %s (slot %d):", m_clients[i]->user.uniqueid,
                         Str::SanitizeUtf8(m_clients[i]->user.username).c_str(), i);
             if (!m_clients[i]->streams.size())
-                Logger::Log(LOG_VERBOSE, "  * no streams registered for user %d", m_clients[i]->user.uniqueid);
+                app.logger().trace("  * no streams registered for user %d", m_clients[i]->user.uniqueid);
             else
                 for (std::map<unsigned int, RoRnet::StreamRegister>::iterator it = m_clients[i]->streams.begin();
                      it != m_clients[i]->streams.end(); it++) {
@@ -752,7 +760,7 @@ void Sequencer::streamDebug() {
                     char *typeStr = (char *) "unkown";
                     if (it->second.type >= 0 && it->second.type <= 3)
                         typeStr = types[it->second.type];
-                    Logger::Log(LOG_VERBOSE, "  * %d:%d, type:%s status:%d name:'%s'", m_clients[i]->user.uniqueid,
+                    app.logger().trace("  * %d:%d, type:%s status:%d name:'%s'", m_clients[i]->user.uniqueid,
                                 it->first, typeStr, it->second.status, it->second.name);
                 }
         }
@@ -761,7 +769,7 @@ void Sequencer::streamDebug() {
 
 //this is called by the receivers threads, like crazy & concurrently
 void Sequencer::queueMessage(int uid, int type, unsigned int streamid, char *data, unsigned int len) {
-    MutexLocker scoped_lock(m_clients_mutex);
+    const std::lock_guard<std::mutex> scoped_lock(m_clients_mutex);
     auto &app = Poco::Util::Application::instance();
 
     Client *client = this->FindClientById(static_cast<unsigned int>(uid));
@@ -802,7 +810,7 @@ void Sequencer::queueMessage(int uid, int type, unsigned int streamid, char *dat
         RoRnet::StreamRegister *reg = (RoRnet::StreamRegister *) data;
         if (client->streams.size() >= app.config_max_vehicles + NON_VEHICLE_STREAMS) {
             // This user has too many vehicles, we drop the stream and then disconnect the user
-            Logger::Log(LOG_INFO, "%s(%d) has too many streams. Stream dropped, user kicked.",
+            app.logger().information( "%s(%d) has too many streams. Stream dropped, user kicked.",
                         Str::SanitizeUtf8(client->user.username).c_str(), client->user.uniqueid);
 
             // send a message to the user.
@@ -819,7 +827,7 @@ void Sequencer::queueMessage(int uid, int type, unsigned int streamid, char *dat
             publishMode = BROADCAST_BLOCK; // drop
         } else if (reg->type == STREAM_REG_TYPE_VEHICLE && !client->CheckSpawnRate()) {
             // This user spawns vehicles too fast, we drop the stream and then disconnect the user
-            Logger::Log(LOG_INFO, "%s(%d) spawns vehicles too fast. Stream dropped, user kicked.",
+            app.logger().information( "%s(%d) spawns vehicles too fast. Stream dropped, user kicked.",
                         client->GetUsername().c_str(), client->user.uniqueid);
 
             // broadcast a general message that this user was auto-kicked
@@ -835,7 +843,7 @@ void Sequencer::queueMessage(int uid, int type, unsigned int streamid, char *dat
             publishMode = BROADCAST_BLOCK; // drop
         } else if (reg->type == STREAM_REG_TYPE_VEHICLE && !Utils::isValidVehicleFileName(reg->name)) {
             // This user spawned vehicle with empty or malformed name, we drop the stream and then disconnect the user
-            Logger::Log(LOG_INFO, "%s(%d) spawned vehicle with empty/malformed name. Stream dropped, user kicked.",
+            app.logger().information( "%s(%d) spawned vehicle with empty/malformed name. Stream dropped, user kicked.",
                         client->GetUsername().c_str(), client->user.uniqueid);
 
             // broadcast a general message that this user was auto-kicked
@@ -870,7 +878,7 @@ void Sequencer::queueMessage(int uid, int type, unsigned int streamid, char *dat
                         break;
 
                     default:
-                        Logger::Log(LOG_ERROR, "Stream broadcasting mode not supported.");
+                        app.logger().error( "Stream broadcasting mode not supported.");
                         break;
                 }
             }
@@ -879,7 +887,7 @@ void Sequencer::queueMessage(int uid, int type, unsigned int streamid, char *dat
             if (publishMode != BROADCAST_BLOCK) {
                 // Add the stream
                 reg->name[127] = 0;
-                Logger::Log(LOG_VERBOSE, " * new stream registered: %d:%d, type: %d, name: '%s', status: %d",
+                app.logger().trace(" * new stream registered: %d:%d, type: %d, name: '%s', status: %d",
                             client->user.uniqueid, streamid, reg->type, reg->name, reg->status);
                 client->streams[streamid] = *reg;
 
@@ -923,23 +931,23 @@ void Sequencer::queueMessage(int uid, int type, unsigned int streamid, char *dat
         Client *origin_client = this->FindClientById(reg->origin_sourceid);
         if (origin_client != nullptr) {
             origin_client->QueueMessage(type, uid, streamid, sizeof(RoRnet::StreamRegister), (char *) reg);
-            Logger::Log(LOG_VERBOSE, "stream registration result for stream %03d:%03d from user %03d: %d",
+            app.logger().trace("stream registration result for stream %03d:%03d from user %03d: %d",
                         reg->origin_sourceid, reg->origin_streamid, uid, reg->status);
         }
         publishMode = BROADCAST_BLOCK;
     } else if (type == RoRnet::MSG2_STREAM_UNREGISTER) {
         // Remove the stream
         if (client->streams.erase(streamid) > 0) {
-            Logger::Log(LOG_VERBOSE, " * stream deregistered: %d:%d", client->user.uniqueid, streamid);
+            app.logger().trace(" * stream deregistered: %d:%d", client->user.uniqueid, streamid);
             publishMode = BROADCAST_ALL;
         }
     } else if (type == RoRnet::MSG2_USER_LEAVE) {
         // from client
-        Logger::Log(LOG_INFO, "User disconnects on request: " + Str::SanitizeUtf8(client->user.username));
+        app.logger().information( "User disconnects on request: " + Str::SanitizeUtf8(client->user.username));
         QueueClientForDisconnect(client->user.uniqueid, "disconnected on request", false);
     } else if (type == RoRnet::MSG2_UTF8_CHAT) {
         std::string str = Str::SanitizeUtf8(data);
-        Logger::Log(LOG_INFO, "CHAT| %s: %s", Str::SanitizeUtf8(client->user.username).c_str(), str.c_str());
+        app.logger().information( "CHAT| %s: %s", Str::SanitizeUtf8(client->user.username).c_str(), str.c_str());
 
         publishMode = BROADCAST_ALL;
         if (str[0] == '!') {
@@ -1226,7 +1234,7 @@ Client *Sequencer::getClient(int uid) {
 }
 
 void Sequencer::UpdateMinuteStats() {
-    MutexLocker scoped_lock(m_clients_mutex);
+    const std::lock_guard<std::mutex> scoped_lock(m_clients_mutex);
 
     for (unsigned int i = 0; i < m_clients.size(); i++) {
         if (m_clients[i]->GetStatus() == Client::STATUS_USED) {
@@ -1251,10 +1259,10 @@ void Sequencer::printStats() {
     }
 
     {
-        Logger::Log(LOG_INFO, "Server occupancy:");
+        app.logger().information( "Server occupancy:");
 
-        Logger::Log(LOG_INFO, "Slot Status   UID IP                  Colour, Nickname");
-        Logger::Log(LOG_INFO, "--------------------------------------------------");
+        app.logger().information( "Slot Status   UID IP                  Colour, Nickname");
+        app.logger().information( "--------------------------------------------------");
         for (unsigned int i = 0; i < m_clients.size(); i++) {
             // some auth identifiers
             char authst[10] = "";
@@ -1266,33 +1274,33 @@ void Sequencer::printStats() {
 
             // construct screen
             if (m_clients[i]->GetStatus() == Client::STATUS_FREE)
-                Logger::Log(LOG_INFO, "%4i Free", i);
+                app.logger().information( "%4i Free", i);
             else if (m_clients[i]->GetStatus() == Client::STATUS_BUSY)
-                Logger::Log(LOG_INFO, "%4i Busy %5i %-16s % 4s %d, %s", i,
+                app.logger().information( "%4i Busy %5i %-16s % 4s %d, %s", i,
                             m_clients[i]->user.uniqueid, "-",
                             authst,
                             m_clients[i]->user.colournum,
                             Str::SanitizeUtf8(m_clients[i]->user.username).c_str());
             else
-                Logger::Log(LOG_INFO, "%4i Used %5i %-16s % 4s %d, %s", i,
+                app.logger().information( "%4i Used %5i %-16s % 4s %d, %s", i,
                             m_clients[i]->user.uniqueid,
                             m_clients[i]->GetIpAddress().c_str(),
                             authst,
                             m_clients[i]->user.colournum,
                             Str::SanitizeUtf8(m_clients[i]->user.username).c_str());
         }
-        Logger::Log(LOG_INFO, "--------------------------------------------------");
+        app.logger().information( "--------------------------------------------------");
         int timediff = Messaging::getTime() - m_start_time;
         int uphours = timediff / 60 / 60;
         int upminutes = (timediff - (uphours * 60 * 60)) / 60;
         stream_traffic_t traffic = Messaging::GetTrafficStats();
 
-        Logger::Log(LOG_INFO, "- traffic statistics (uptime: %d hours, %d "
+        app.logger().information( "- traffic statistics (uptime: %d hours, %d "
                 "minutes):", uphours, upminutes);
-        Logger::Log(LOG_INFO, "- total: incoming: %0.2fMB , outgoing: %0.2fMB",
+        app.logger().information( "- total: incoming: %0.2fMB , outgoing: %0.2fMB",
                     traffic.bandwidthIncoming / 1024 / 1024,
                     traffic.bandwidthOutgoing / 1024 / 1024);
-        Logger::Log(LOG_INFO, "- rate (last minute): incoming: %0.1fkB/s , "
+        app.logger().information( "- rate (last minute): incoming: %0.1fkB/s , "
                             "outgoing: %0.1fkB/s",
                     traffic.bandwidthIncomingRate / 1024,
                     traffic.bandwidthOutgoingRate / 1024);
@@ -1314,7 +1322,7 @@ Client *Sequencer::FindClientById(unsigned int client_id) {
 }
 
 std::vector<WebserverClientInfo> Sequencer::GetClientListCopy() {
-    MutexLocker scoped_lock(m_clients_mutex);
+    const std::lock_guard<std::mutex> scoped_lock(m_clients_mutex);
 
     std::vector<WebserverClientInfo> output;
     for (Client *c : m_clients) {

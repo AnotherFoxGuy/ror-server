@@ -40,11 +40,11 @@ void SpamFilter::CheckConfig()
 {
     auto &app = Poco::Util::Application::instance();
     if (SpamFilter::IsActive()) {
-        Logger::Log(LOG_INFO, "spam filter: active, %d msg/%d sec -> %d sec gag",
+        app.logger().information( "spam filter: active, %d msg/%d sec -> %d sec gag",
             app.config_spamfilter_msg_count, app.config_spamfilter_msg_interval_sec,
             app.config_spamfilter_gag_duration_sec);
     } else {
-        Logger::Log(LOG_INFO, "spam filter: disabled");
+        app.logger().information( "spam filter: disabled");
     }
 }
 

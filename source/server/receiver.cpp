@@ -24,7 +24,7 @@ along with Foobar. If not, see <http://www.gnu.org/licenses/>.
 #include "sequencer.h"
 #include "messaging.h"
 #include "ScriptEngine.h"
-#include "logger.h"
+#include "Poco/Util/Application.h"
 
 #include <cstring>
 
@@ -60,7 +60,8 @@ void Receiver::Stop() {
 }
 
 void Receiver::Thread() {
-    Logger::Log(LOG_DEBUG, "Started receiver thread %d owned by user ID %d", ThreadID::getID(), m_client->GetUserId());
+    auto &app = Poco::Util::Application::instance();
+    app.logger().trace( "Started receiver thread %d owned by user ID %d", ThreadID::getID(), m_client->GetUserId());
 
     //okay, we are ready, we can receive data frames
     m_client->SetReceiveData(true);
@@ -68,7 +69,7 @@ void Receiver::Thread() {
     //send motd
     m_sequencer->sendMOTD(m_client->GetUserId());
 
-    Logger::Log(LOG_VERBOSE, "UID %d is switching to FLOW", m_client->GetUserId());
+    app.logger().trace("UID %d is switching to FLOW", m_client->GetUserId());
 
     // this prevents the socket from hangingwhen sending data
     // which is the cause of threads getting blocked
@@ -84,7 +85,7 @@ void Receiver::Thread() {
 
         if (m_recv_header.command != RoRnet::MSG2_STREAM_DATA &&
             m_recv_header.command != RoRnet::MSG2_STREAM_DATA_DISCARDABLE) {
-            Logger::Log(LOG_VERBOSE, "got message: type: %d, source: %d:%d, len: %d",
+            app.logger().trace("got message: type: %d, source: %d:%d, len: %d",
                         (int)m_recv_header.command, m_recv_header.source, m_recv_header.streamid, m_recv_header.size);
         }
 
@@ -97,7 +98,7 @@ void Receiver::Thread() {
             (int)m_recv_header.command, m_recv_header.streamid, m_recv_payload, m_recv_header.size);
     }
 
-    Logger::Log(LOG_DEBUG, "Receiver thread %d (user ID %d) exits", ThreadID::getID(), m_client->GetUserId());
+    app.logger().trace( "Receiver thread %d (user ID %d) exits", ThreadID::getID(), m_client->GetUserId());
 }
 
 bool Receiver::ThreadReceiveMessage()
@@ -122,18 +123,19 @@ bool Receiver::ThreadReceiveMessage()
 bool Receiver::ThreadReceiveHeader() //!< @return false if thread should be stopped, true to continue.
 {
     SWBaseSocket::SWBaseError error;
+    auto &app = Poco::Util::Application::instance();
 
     std::memset((void*)&m_recv_header, 0, sizeof(RoRnet::Header));
     if (m_client->GetSocket()->frecv((char*)&m_recv_header, (int)sizeof(RoRnet::Header), &error) <= 0)
     {
-        Logger::Log(LOG_WARN, "Receiver: error getting header: %s", error.get_error().c_str());
+        app.logger().warning("Receiver: error getting header: %s", error.get_error().c_str());
         return false; // stop thread.
     }
 
     if (m_recv_header.size > RORNET_MAX_MESSAGE_LENGTH)
     {
         // Oversized payload
-        Logger::Log(LOG_WARN, "Receiver: payload too long: %d/ max. %d bytes", (int)m_recv_header.size, RORNET_MAX_MESSAGE_LENGTH);
+        app.logger().warning("Receiver: payload too long: %d/ max. %d bytes", (int)m_recv_header.size, RORNET_MAX_MESSAGE_LENGTH);
         return false; // Stop thread.
     }
 
@@ -143,11 +145,12 @@ bool Receiver::ThreadReceiveHeader() //!< @return false if thread should be stop
 bool Receiver::ThreadReceivePayload() //!< @return false if thread should be stopped, true to continue.
 {
     SWBaseSocket::SWBaseError error;
+    auto &app = Poco::Util::Application::instance();
 
     std::memset(m_recv_payload, 0, RORNET_MAX_MESSAGE_LENGTH);
     if (m_client->GetSocket()->frecv(m_recv_payload, (int)m_recv_header.size, &error) <= 0)
     {
-        Logger::Log(LOG_WARN, "Receiver: error getting payload: %s", error.get_error().c_str());
+        app.logger().warning("Receiver: error getting payload: %s", error.get_error().c_str());
         return false; // stop thread.
     }
 

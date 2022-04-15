@@ -22,7 +22,6 @@ along with Foobar. If not, see <http://www.gnu.org/licenses/>.
 
 #include "config.h"
 #include "rornet.h"
-#include "logger.h"
 #include "http.h"
 #include "json/json.h"
 
@@ -50,14 +49,14 @@ namespace MasterServer {
 
         m_server_path = "/" + app.config_serverlist_path + "/server-list";
 
-        Logger::Log(LOG_INFO, "Attempting to register on serverlist (%s)", m_server_path.c_str());
+        app.logger().information( "Attempting to register on serverlist (%s)", m_server_path.c_str());
         Http::Response response;
         int result_code = this->HttpRequest(Http::METHOD_POST, data.toStyledString().c_str(), &response);
         if (result_code < 0) {
-            Logger::Log(LOG_ERROR, "Registration failed, result code: %d", result_code);
+            app.logger().error( "Registration failed, result code: %d", result_code);
             return false;
         } else if (result_code != 200) {
-            Logger::Log(LOG_INFO, "Registration failed, response code: HTTP %d, body: %s", result_code,
+            app.logger().information( "Registration failed, response code: HTTP %d, body: %s", result_code,
                         response.GetBody().c_str());
             return false;
         }
@@ -65,16 +64,16 @@ namespace MasterServer {
         Json::Value root;
         Json::Reader reader;
         if (!reader.parse(response.GetBody().c_str(), root)) {
-            Logger::Log(LOG_ERROR, "Registration failed, invalid server response (JSON parsing failed)");
-            Logger::Log(LOG_DEBUG, "Raw response: %s", response.GetBody().c_str());
+            app.logger().error( "Registration failed, invalid server response (JSON parsing failed)");
+            app.logger().trace( "Raw response: %s", response.GetBody().c_str());
             return false;
         }
 
         Json::Value trust_level = root["verified-level"];
         Json::Value challenge = root["challenge"];
         if (!root.isObject() || !trust_level.isNumeric() || !challenge.isString()) {
-            Logger::Log(LOG_ERROR, "Registration failed, incorrect response from server");
-            Logger::Log(LOG_DEBUG, "Raw response: %s", response.GetBody().c_str());
+            app.logger().error( "Registration failed, incorrect response from server");
+            app.logger().trace( "Raw response: %s", response.GetBody().c_str());
             return false;
         }
 
@@ -85,35 +84,37 @@ namespace MasterServer {
     }
 
     bool Client::SendHeatbeat(Json::Value &user_list) {
+        auto &app = Poco::Util::Application::instance();
         Json::Value data(Json::objectValue);
         data["challenge"] = m_token;
         data["users"] = user_list;
         std::string json_str = data.toStyledString();
-        Logger::Log(LOG_DEBUG, "Heartbeat JSON:\n%s", json_str.c_str());
+        app.logger().trace( "Heartbeat JSON:\n%s", json_str.c_str());
 
         Http::Response response;
         int result_code = this->HttpRequest(Http::METHOD_PUT, json_str.c_str(), &response);
         if (result_code != 200) {
             const char *type = (result_code < 0) ? "result code" : "HTTP code";
-            Logger::Log(LOG_ERROR, "Heatbeat failed, %s: %d", type, result_code);
+            app.logger().error( "Heatbeat failed, %s: %d", type, result_code);
             return false;
         }
         return true;
     }
 
     bool Client::UnRegister() {
+        auto &app = Poco::Util::Application::instance();
         assert(m_is_registered == true);
 
         Json::Value data(Json::objectValue);
         data["challenge"] = m_token;
         std::string json_str = data.toStyledString();
-        Logger::Log(LOG_DEBUG, "UnRegister JSON:\n%s", json_str.c_str());
+        app.logger().trace( "UnRegister JSON:\n%s", json_str.c_str());
 
         Http::Response response;
         int result_code = this->HttpRequest(Http::METHOD_DELETE, json_str.c_str(), &response);
         if (result_code < 0) {
             const char *type = (result_code < 0) ? "result code" : "HTTP code";
-            Logger::Log(LOG_ERROR, "Failed to un-register server, %s: %d", type, result_code);
+            app.logger().error( "Failed to un-register server, %s: %d", type, result_code);
             return false;
         }
         m_is_registered = false;
@@ -136,7 +137,7 @@ namespace MasterServer {
         int result_code = Http::Request(Http::METHOD_GET,
                                         app.config_serverlist_host, url, "application/json", "", &response);
         if (result_code < 0) {
-            Logger::Log(LOG_ERROR, "Failed to retrieve public IP address");
+            app.logger().error( "Failed to retrieve public IP address");
             return false;
         }
         app.config().setString("ip", response.GetBody());

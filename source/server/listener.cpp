@@ -24,7 +24,6 @@ along with Foobar. If not, see <http://www.gnu.org/licenses/>.
 #include "messaging.h"
 #include "sequencer.h"
 #include "SocketW.h"
-#include "logger.h"
 #include "config.h"
 #include "UnicodeStrings.h"
 #include "utils.h"
@@ -68,21 +67,23 @@ bool Listener::Initialize() {
 }
 
 void Listener::Shutdown() {
-    Logger::Log(LOG_VERBOSE, "Stopping listener thread...");
+    auto &app = Poco::Util::Application::instance();
+    app.logger().trace("Stopping listener thread...");
     m_thread_shutdown = true;
     m_listen_socket.disconnect();
     pthread_join(m_thread, nullptr);
-    Logger::Log(LOG_VERBOSE, "Listener thread stopped");
+    app.logger().trace("Listener thread stopped");
 }
 
 bool Listener::WaitUntilReady() {
+    auto &app = Poco::Util::Application::instance();
     int result = 0;
     if (!m_ready_cond.Wait(&result)) {
-        Logger::Log(LOG_ERROR, "Internal: Error while starting listener thread");
+        app.logger().error( "Internal: Error while starting listener thread");
         return false;
     }
     if (result < 0) {
-        Logger::Log(LOG_ERROR, "Internal: Listerer thread failed to start");
+        app.logger().error( "Internal: Listerer thread failed to start");
         return false;
     }
     return true;
@@ -91,7 +92,7 @@ bool Listener::WaitUntilReady() {
 void Listener::threadstart() {
     auto &app = Poco::Util::Application::instance();
 
-    Logger::Log(LOG_DEBUG, "Listerer thread starting");
+    app.logger().trace( "Listerer thread starting");
     //here we start
     SWBaseSocket::SWBaseError error;
 
@@ -99,30 +100,30 @@ void Listener::threadstart() {
     m_listen_socket.bind(m_listen_port, &error);
     if (error != SWBaseSocket::ok) {
         //this is an error!
-        Logger::Log(LOG_ERROR, "FATAL Listerer: %s", error.get_error().c_str());
+        app.logger().error( "FATAL Listerer: %s", error.get_error().c_str());
         //there is nothing we can do here
         return;
         // exit(1);
     }
     m_listen_socket.listen();
 
-    Logger::Log(LOG_VERBOSE, "Listener ready");
+    app.logger().trace("Listener ready");
     m_ready_cond.Signal(1);
 
     //await connections
     while (!m_thread_shutdown) {
-        Logger::Log(LOG_VERBOSE, "Listener awaiting connections");
+        app.logger().trace("Listener awaiting connections");
         SWInetSocket *ts = (SWInetSocket *) m_listen_socket.accept(&error);
 
         if (error != SWBaseSocket::ok) {
             if (m_thread_shutdown) {
-                Logger::Log(LOG_ERROR, "INFO Listener shutting down");
+                app.logger().error( "INFO Listener shutting down");
             } else {
-                Logger::Log(LOG_ERROR, "ERROR Listener: %s", error.get_error().c_str());
+                app.logger().error( "ERROR Listener: %s", error.get_error().c_str());
             }
         }
 
-        Logger::Log(LOG_VERBOSE, "Listener got a new connection");
+        app.logger().trace("Listener got a new connection");
 
         ts->set_timeout(5, 0);
 
@@ -146,7 +147,7 @@ void Listener::threadstart() {
 
             // check client version
             if (source == 5000 && (std::string(buffer) == "MasterServer")) {
-                Logger::Log(LOG_VERBOSE, "Master Server knocked ...");
+                app.logger().trace("Master Server knocked ...");
                 // send back some information, then close socket
                 char tmp[2048] = "";
                 sprintf(tmp, "protocol:%s\nrev:%s\nbuild_on:%s_%s\n", RORNET_VERSION, VERSION, __DATE__, __TIME__);
@@ -177,7 +178,7 @@ void Listener::threadstart() {
                 }
             }
 
-            Logger::Log(LOG_DEBUG, "Listener sending server settings");
+            app.logger().trace( "Listener sending server settings");
             RoRnet::ServerInfo settings;
             memset(&settings, 0, sizeof(RoRnet::ServerInfo));
             settings.has_password = !app.config_public_password.empty();
@@ -204,7 +205,7 @@ void Listener::threadstart() {
 
             if (len > sizeof(RoRnet::UserInfo))
                 throw std::runtime_error("Error: did not receive proper user credentials");
-            Logger::Log(LOG_INFO, "Listener creating a new client...");
+            app.logger().information( "Listener creating a new client...");
 
             RoRnet::UserInfo *user = (RoRnet::UserInfo *) buffer;
             user->authstatus = RoRnet::AUTH_NONE;
@@ -216,7 +217,7 @@ void Listener::threadstart() {
             strncpy(user->username, nickname.c_str(), RORNET_MAX_USERNAME_LEN - 1);
 
             if (app.config_server_mode == "INET") {
-                Logger::Log(LOG_DEBUG, "password login: %s == %s?",
+                app.logger().trace( "password login: %s == %s?",
                             app.config_public_password.c_str(),
                             std::string(user->serverpassword, 40).c_str());
                 if (strncmp(app.config_public_password.c_str(), user->serverpassword, 40)) {
@@ -224,18 +225,18 @@ void Listener::threadstart() {
                     throw std::runtime_error("ERROR Listener: wrong password");
                 }
 
-                Logger::Log(LOG_DEBUG, "user used the correct password, "
+                app.logger().trace( "user used the correct password, "
                         "creating client!");
             } else {
-                Logger::Log(LOG_DEBUG, "no password protection, creating client");
+                app.logger().trace( "no password protection, creating client");
             }
 
             //create a new client
             m_sequencer->createClient(ts, *user); // copy the user info, since the buffer will be cleared soon
-            Logger::Log(LOG_DEBUG, "listener returned!");
+            app.logger().trace( "listener returned!");
         }
         catch (std::runtime_error &e) {
-            Logger::Log(LOG_ERROR, e.what());
+            app.logger().error( e.what());
             ts->disconnect(&error);
             delete ts;
         }

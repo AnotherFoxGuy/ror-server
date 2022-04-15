@@ -61,9 +61,7 @@ SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO ${RUNTIME_OUTPUT_DIRECTORY})
 SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG ${RUNTIME_OUTPUT_DIRECTORY})
 
 
-if (WIN32)
-    add_subdirectory(dependencies/win32_pthread)
-else ()
+if (LINUX)
     add_definitions(-Wall)
     option(RORSERVER_CRASHHANDLER "enables linux startup script crashhandling" FALSE)
 

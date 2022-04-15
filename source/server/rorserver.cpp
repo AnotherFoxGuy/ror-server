@@ -22,7 +22,6 @@ along with Foobar. If not, see <http://www.gnu.org/licenses/>.
 
 #include "config.h"
 #include "listener.h"
-#include "logger.h"
 #include "master-server.h"
 #include "messaging.h"
 #include "rornet.h"
@@ -73,24 +72,23 @@ class HeartBeatTask : public Poco::Task
             {
                 Messaging::UpdateMinuteStats();
                 s_sequencer.UpdateMinuteStats();
-
-                Logger::Log(LOG_VERBOSE, "Sending heartbeat...");
+                app.logger().trace("Sending heartbeat...");
                 Json::Value user_list(Json::arrayValue);
                 s_sequencer.GetHeartbeatUserList(user_list);
                 if (!s_master_server.SendHeatbeat(user_list))
                 {
                     unsigned int timeout = app.config_heartbeat_retry_seconds;//app.config().getIntHeartbeatRetrySeconds();
                     unsigned int max_retries = app.config_heartbeat_retry_count;
-                    Logger::Log(LOG_WARN, "A heartbeat failed! Retry in %d seconds.", timeout);
+                    app.logger().warning("A heartbeat failed! Retry in %d seconds.", timeout);
                     bool success = false;
                     for (unsigned int i = 0; i < max_retries; ++i)
                     {
                         Utils::SleepSeconds(timeout);
                         success = s_master_server.SendHeatbeat(user_list);
 
-                        LogLevel log_level = (success ? LOG_INFO : LOG_ERROR);
-                        const char *log_result = (success ? "successful." : "failed.");
-                        Logger::Log(log_level, "Heartbeat retry %d/%d %s", i + 1, max_retries, log_result);
+//                        LogLevel log_level = (success ? LOG_INFO : LOG_ERROR);
+//                        const char *log_result = (success ? "successful." : "failed.");
+//                        Logger::Log(log_level, "Heartbeat retry %d/%d %s", i + 1, max_retries, log_result);
                         if (success)
                         {
                             break;
@@ -98,13 +96,14 @@ class HeartBeatTask : public Poco::Task
                     }
                     if (!success)
                     {
-                        Logger::Log(LOG_ERROR, "Unable to send heartbeats, exit");
+                        app.logger().error( "Unable to send heartbeats, exit");
+
                         return;
                     }
                 }
                 else
                 {
-                    Logger::Log(LOG_VERBOSE, "Heartbeat sent OK");
+                    app.logger().trace("Heartbeat sent OK");
                 }
             }
         }
@@ -112,7 +111,9 @@ class HeartBeatTask : public Poco::Task
         {
             while (!sleep(60000))
             {
-                Logger::Log(LOG_VERBOSE, "AAAAAAAAAAAAAAAAAAAAAAAAA");
+                app.logger().trace("AAAAAAAAAAAAAAAAAAAAAAAAA");
+
+
 
                 Messaging::UpdateMinuteStats();
                 s_sequencer.UpdateMinuteStats();
@@ -191,41 +192,38 @@ class RoRServer : public ServerApplication
     int main(const std::vector<std::string> &args)
     {
         // set default verbose levels
-        Logger::SetLogLevel(LOGTYPE_DISPLAY, LOG_INFO);
-        Logger::SetLogLevel(LOGTYPE_FILE, LOG_VERBOSE);
-        Logger::SetOutputFile("server.log");
 
         // Check configuration
         if (config().getString("mode", "LAN") == "INET")
         {
-            Logger::Log(LOG_INFO, "Starting server in INET mode");
+            logger().information( "Starting server in INET mode");
             std::string ip_addr = config().getString("ip", "127.0.0.1");
             if (ip_addr.empty() || (ip_addr == "0.0.0.0"))
             {
-                Logger::Log(LOG_WARN, "No IP given, detecting...");
+                logger().warning("No IP given, detecting...");
                 if (!MasterServer::RetrievePublicIp())
                 {
-                    Logger::Log(LOG_ERROR, "Failed to auto-detect public IP, exit.");
+                    logger().error( "Failed to auto-detect public IP, exit.");
                     return Application::EXIT_TEMPFAIL;
                 }
             }
-            Logger::Log(LOG_INFO, "IP address: %s", config_ip_addr.c_str());
+            logger().information( "IP address: %s", config_ip_addr.c_str());
 
             unsigned int max_clients = config_max_clients;
-            Logger::Log(LOG_INFO, "Maximum required upload: %ikbit/s", max_clients * (max_clients - 1) * 64);
-            Logger::Log(LOG_INFO, "Maximum required download: %ikbit/s", max_clients * 64);
+            logger().information( "Maximum required upload: %ikbit/s", max_clients * (max_clients - 1) * 64);
+            logger().information( "Maximum required download: %ikbit/s", max_clients * 64);
 
             if (config_server_name.empty())
             {
-                Logger::Log(LOG_ERROR, "Server name not specified, exit.");
+                logger().error( "Server name not specified, exit.");
                 return Application::EXIT_USAGE;
             }
-            Logger::Log(LOG_INFO, "Server name: %s", config_server_name.c_str());
+            logger().information( "Server name: %s", config_server_name.c_str());
         }
 
         if (!sha1check())
         {
-            Logger::Log(LOG_ERROR, "sha1 malfunction!");
+            logger().error( "sha1 malfunction!");
             return Application::EXIT_SOFTWARE;
         }
 
@@ -247,18 +245,18 @@ class RoRServer : public ServerApplication
             bool registered = s_master_server.Register();
             if (!registered && (config_server_mode == "INET"))
             {
-                Logger::Log(LOG_ERROR, "Failed to register on serverlist. Exit");
+                logger().error( "Failed to register on serverlist. Exit");
                 listener.Shutdown();
                 return Application::EXIT_UNAVAILABLE;
             }
             else if (!registered) // server_mode == SERVER_AUTO
             {
-                Logger::Log(LOG_WARN, "Failed to register on serverlist, continuing in LAN mode");
+                logger().warning("Failed to register on serverlist, continuing in LAN mode");
                 config().setString("mode", "LAN");
             }
             else
             {
-                Logger::Log(LOG_INFO, "Registration successful");
+                logger().information( "Registration successful");
             }
         }
 
