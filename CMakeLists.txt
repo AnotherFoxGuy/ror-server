@@ -88,6 +88,7 @@ endif ()
 if (RORSERVER_WITH_ANGELSCRIPT)
     add_subdirectory("source/angelscript_add_on")
 endif ()
+add_subdirectory("dependencies/enet")
 add_subdirectory("source/server")
 
 feature_summary(WHAT ALL)
