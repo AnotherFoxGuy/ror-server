@@ -169,6 +169,7 @@ class RoRServer : public ServerApplication
 
     void loadConfig(const std::string &name, const std::string &value)
     {
+        logger().information( "Loading config from %s", value);
         loadConfiguration(value);
     }
 
@@ -192,9 +193,10 @@ class RoRServer : public ServerApplication
     int main(const std::vector<std::string> &args)
     {
         // set default verbose levels
+        logger().setLevel("trace");
 
         // Check configuration
-        if (config().getString("mode", "LAN") == "INET")
+        if (config_server_mode == "INET")
         {
             logger().information( "Starting server in INET mode");
             std::string ip_addr = config().getString("ip", "127.0.0.1");
@@ -228,16 +230,8 @@ class RoRServer : public ServerApplication
         }
 
         Listener listener(&s_sequencer, config_listen_port);
-        if (!listener.Initialize())
-        {
-            return -1;
-        }
+        listener.activity().start();
         s_sequencer.Initialize();
-
-        if (!listener.WaitUntilReady())
-        {
-            return Application::EXIT_IOERR; // Error already logged
-        }
 
         // Listener is ready, let's register ourselves on serverlist (which will contact us back to check).
         if (config_server_mode != "LAN")
@@ -246,7 +240,7 @@ class RoRServer : public ServerApplication
             if (!registered && (config_server_mode == "INET"))
             {
                 logger().error( "Failed to register on serverlist. Exit");
-                listener.Shutdown();
+                listener.activity().stop();
                 return Application::EXIT_UNAVAILABLE;
             }
             else if (!registered) // server_mode == SERVER_AUTO

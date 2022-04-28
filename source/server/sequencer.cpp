@@ -60,14 +60,16 @@ Client::Client(Sequencer *sequencer, SWInetSocket *socket) :
 
 void Client::StartThreads() {
     m_receiver.Start(this);
+    m_receiver.activity().start();
     m_broadcaster.Start(this);
+    m_broadcaster.activity().start();
 }
 
 void Client::Disconnect() {
     auto &app = Poco::Util::Application::instance();
     // Signal threads to stop and wait for them to finish
-    m_broadcaster.Stop();
-    m_receiver.Stop();
+    m_broadcaster.activity().stop();
+    m_receiver.activity().stop();
 
     // Disconnect the socket
     SWBaseSocket::SWBaseError result;
@@ -141,16 +143,9 @@ void Client::NotifyAllVehicles(Sequencer *sequencer) {
     }
 }
 
-void *LaunchKillerThread(void *data) {
-    Sequencer *sequencer = static_cast<Sequencer *>(data);
-    sequencer->killerthreadstart();
-    return nullptr;
-}
-
 Sequencer::Sequencer() :
         m_script_engine(nullptr),
         m_auth_resolver(nullptr),
-        m_clients_mutex(/*recursive=*/ true),
         m_num_disconnects_total(0),
         m_num_disconnects_crash(0),
         m_blacklist(this),
@@ -173,7 +168,7 @@ void Sequencer::Initialize() {
     }
 #endif //WITH_ANGELSCRIPT
 
-    pthread_create(&m_killer_thread, NULL, LaunchKillerThread, this);
+    //m_killer_thread = std::thread(LaunchKillerThread, this);
 
     m_auth_resolver = new UserAuth(app.config_authfile);
 
@@ -192,7 +187,7 @@ void Sequencer::Close() {
     for (unsigned int i = 0; i < m_clients.size(); i++) {
         // HACK-ISH override all thread stuff and directly send it!
         Client *client = m_clients[i];
-        Messaging::SendMessage(client->GetSocket(), RoRnet::MSG2_USER_LEAVE, client->user.uniqueid, 0, strlen(str),
+        Messaging::SWSendMessage(client->GetSocket(), RoRnet::MSG2_USER_LEAVE, client->user.uniqueid, 0, strlen(str),
                                str);
     }
     app.logger().information( "all clients disconnected. exiting.");
@@ -209,8 +204,9 @@ void Sequencer::Close() {
         m_auth_resolver = nullptr;
     }
 
-    pthread_cancel(m_killer_thread);
-    pthread_detach(m_killer_thread);
+//    pthread_cancel(m_killer_thread);
+//    pthread_detach(m_killer_thread);
+    m_killer_thread.detach();
 }
 
 bool Sequencer::CheckNickIsUnique(std::string &nick) {
@@ -260,7 +256,7 @@ void Sequencer::createClient(SWInetSocket *sock, RoRnet::UserInfo user) {
     SWBaseSocket::SWBaseError error;
     if (Sequencer::IsBanned(sock->get_peerAddr(&error).c_str())) {
         app.logger().warning("rejected banned client '%s' with IP %s", nick.c_str(), sock->get_peerAddr(&error).c_str());
-        Messaging::SendMessage(sock, RoRnet::MSG2_BANNED, 0, 0, 0, 0);
+        Messaging::SWSendMessage(sock, RoRnet::MSG2_BANNED, 0, 0, 0, 0);
         return;
     }
 
@@ -272,7 +268,7 @@ void Sequencer::createClient(SWInetSocket *sock, RoRnet::UserInfo user) {
         // set a low time out because we don't want to cause a back up of
         // connecting clients
         sock->set_timeout(10, 0);
-        Messaging::SendMessage(sock, RoRnet::MSG2_FULL, 0, 0, 0, 0);
+        Messaging::SWSendMessage(sock, RoRnet::MSG2_FULL, 0, 0, 0, 0);
         throw std::runtime_error("Server is full");
     }
 
@@ -332,7 +328,7 @@ void Sequencer::createClient(SWInetSocket *sock, RoRnet::UserInfo user) {
     to_add->StartThreads();
 
     app.logger().trace("Sending welcome message to uid %i", client_id);
-    if (Messaging::SendMessage(sock, RoRnet::MSG2_WELCOME, client_id, 0, sizeof(RoRnet::UserInfo),
+    if (Messaging::SWSendMessage(sock, RoRnet::MSG2_WELCOME, client_id, 0, sizeof(RoRnet::UserInfo),
                                (char *) &to_add->user)) {
         this->QueueClientForDisconnect(client_id, "error sending welcome message");
         return;
@@ -415,30 +411,6 @@ int Sequencer::AuthorizeNick(std::string token, std::string &nickname) {
     return m_auth_resolver->resolve(token, nickname, m_free_user_id);
 }
 
-void Sequencer::killerthreadstart() {
-    auto &app = Poco::Util::Application::instance();
-    app.logger().trace( "Killer thread ready");
-    while (1) {
-        app.logger().trace( "Killer entering cycle");
-
-        m_killer_mutex.lock();
-        while (m_kill_queue.empty()) {
-            m_killer_mutex.wait(m_killer_cond);
-        }
-
-        //pop the kill queue
-        Client *to_del = m_kill_queue.front();
-        m_kill_queue.pop();
-        m_killer_mutex.unlock();
-
-        app.logger().trace( "Killer called to kill %s", Str::SanitizeUtf8(to_del->user.username).c_str());
-        to_del->Disconnect();
-
-        delete to_del;
-        to_del = NULL;
-    }
-}
-
 void Sequencer::QueueClientForDisconnect(int uid, const char *errormsg, bool isError /*=true*/, bool doScriptCallback /*= true*/) {
     const std::lock_guard<std::mutex> scoped_lock(m_clients_mutex);
     auto &app = Poco::Util::Application::instance();
@@ -487,10 +459,10 @@ void Sequencer::QueueClientForDisconnect(int uid, const char *errormsg, bool isE
     app.logger().trace("Disconnecting client ID %d: %s", uid, errormsg);
     app.logger().trace( "adding client to kill queue, size: %d", m_kill_queue.size());
     {
-        const std::lock_guard<std::mutex> scoped_lock(m_killer_mutex);
+        std::unique_lock<std::mutex> scoped_lock2(m_killer_mutex);
         m_kill_queue.push(client);
     }
-    m_killer_cond.signal();
+    m_killer_cond.notify_all();
 
     m_num_disconnects_total++;
     if (isError) {

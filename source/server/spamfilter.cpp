@@ -21,7 +21,6 @@ along with Rigs of Rods Server. If not, see <http://www.gnu.org/licenses/>.
 #include "spamfilter.h"
 
 #include "config.h"
-#include "logger.h"
 #include "sequencer.h"
 
 #include "Poco/Util/Application.h"

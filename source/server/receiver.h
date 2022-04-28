@@ -24,7 +24,8 @@ along with Foobar. If not, see <http://www.gnu.org/licenses/>.
 #include "prerequisites.h"
 
 #include <atomic>
-#include <pthread.h>
+#include <thread>
+#include <Poco/Activity.h>
 
 class SWInetSocket;
 
@@ -33,27 +34,27 @@ class Sequencer;
 void *LaunchReceiverThread(void *);
 
 class Receiver {
-    friend void *LaunchReceiverThread(void *);
 
 public:
     Receiver(Sequencer *sequencer);
 
-    ~Receiver();
-
     void Start(Client* client);
 
-    void Stop();
+    Poco::Activity<Receiver> &activity()
+    {
+        return _activity;
+    }
 
 private:
-    void Thread();
+    void runActivity();
     bool ThreadReceiveMessage(); //!< @return false if thread should be stopped, true to continue.
     bool ThreadReceiveHeader(); //!< @return false if thread should be stopped, true to continue.
     bool ThreadReceivePayload(); //!< @return false if thread should be stopped, true to continue.
 
-    pthread_t m_thread;
     Client* m_client;
-    std::atomic<bool> m_keep_running;
     Sequencer *m_sequencer;
+
+    Poco::Activity<Receiver> _activity;
 
     // Received data buffers -- Keep here to be allocated on heap (along with Client)
     RoRnet::Header m_recv_header;

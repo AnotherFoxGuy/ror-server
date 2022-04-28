@@ -20,61 +20,48 @@ along with Foobar. If not, see <http://www.gnu.org/licenses/>.
 
 #include "broadcaster.h"
 
-#include "messaging.h"
 #include "SocketW.h"
+#include "messaging.h"
 #include "sequencer.h"
 
-#include <map>
 #include <algorithm>
+#include <map>
 
-void *StartBroadcasterThread(void *data) {
-    Broadcaster *broadcaster = static_cast<Broadcaster *>(data);
-    broadcaster->Thread();
-    return nullptr;
+#include "Poco/Util/Application.h"
+
+Broadcaster::Broadcaster(Sequencer *sequencer)
+    : m_sequencer(sequencer), m_client(nullptr), m_is_dropping_packets(false), m_packet_drop_counter(0),
+      m_packet_good_counter(0), _activity(this, &Broadcaster::runActivity)
+{
 }
 
-Broadcaster::Broadcaster(Sequencer *sequencer) :
-        m_sequencer(sequencer),
-        m_client(nullptr),
-        m_is_dropping_packets(false),
-        m_packet_drop_counter(0),
-        m_packet_good_counter(0) {
-}
-
-void Broadcaster::Start(Client* client) {
+void Broadcaster::Start(Client *client)
+{
     m_client = client;
     m_is_dropping_packets = false;
     m_packet_drop_counter = 0;
     m_packet_good_counter = 0;
-    m_keep_running.store(true);
     m_msg_queue.clear();
-
-    pthread_create(&m_thread, nullptr, StartBroadcasterThread, this);
 }
 
-void Broadcaster::Stop() {
+void Broadcaster::runActivity()
+{
     auto &app = Poco::Util::Application::instance();
-    app.logger().trace( "Started broadcaster thread %u owned by client_id %d", ThreadID::getID(), m_client->GetUserId());
-        m_queue_cond.signal();
-        pthread_join(m_thread, nullptr);
-    }
-}
-
-void Broadcaster::Thread() {
     bool socket_error = false;
-    while (true) {
+    while (!_activity.isStopped())
+    {
         queue_entry_t msg;
         // define a new scope and use a scope lock
         {
-            const std::lock_guard<std::mutex> scoped_lock(m_queue_mutex);
-            while (m_msg_queue.empty() && m_keep_running.load()) {
-                m_queue_mutex.wait(m_queue_cond);
+            std::unique_lock<std::mutex> scoped_lock(m_queue_mutex);
+            while (m_msg_queue.empty())
+            {
+                m_queue_cond.wait(scoped_lock);
             }
 
-            if (!m_keep_running.load()) {
-                break;
-            }
-            else if (!m_msg_queue.empty()) { // This shouldn't be needed, but rorserver is haunted: https://github.com/RigsOfRods/ror-server/pull/90#issuecomment-500597467 ~ only_a_ptr, 06/2019
+            if (!m_msg_queue.empty())
+            { // This shouldn't be needed, but rorserver is haunted:
+              // https://github.com/RigsOfRods/ror-server/pull/90#issuecomment-500597467 ~ only_a_ptr, 06/2019
                 msg = m_msg_queue.front();
                 m_msg_queue.pop_front();
             }
@@ -86,31 +73,38 @@ void Broadcaster::Thread() {
         }
 
         // TODO WARNING THE SOCKET IS NOT PROTECTED!!!
-        if (Messaging::SendMessage(m_client->GetSocket(), msg.type, msg.uid, msg.streamid, msg.datalen, msg.data) != 0) {
+        if (Messaging::SWSendMessage(m_client->GetSocket(), msg.type, msg.uid, msg.streamid, msg.datalen, msg.data) !=
+            0)
+        {
             m_sequencer->QueueClientForDisconnect(m_client->GetUserId(), "Broadcaster: Send error", true, true);
             socket_error = true;
             break;
         }
     }
 
-    if (!socket_error) {
+    if (!socket_error)
+    {
         const std::lock_guard<std::mutex> scoped_lock(m_queue_mutex);
-        for (const auto& msg : m_msg_queue) {
-            if (msg.type != RoRnet::MSG2_STREAM_DATA && msg.type != RoRnet::MSG2_STREAM_DATA_DISCARDABLE) {
-                Messaging::SendMessage(m_client->GetSocket(), msg.type, msg.uid, msg.streamid, msg.datalen, msg.data);
+        for (const auto &msg : m_msg_queue)
+        {
+            if (msg.type != RoRnet::MSG2_STREAM_DATA && msg.type != RoRnet::MSG2_STREAM_DATA_DISCARDABLE)
+            {
+                Messaging::SWSendMessage(m_client->GetSocket(), msg.type, msg.uid, msg.streamid, msg.datalen, msg.data);
             }
         }
     }
 
-    app.logger().trace( "Broadcaster thread %u (client_id %d) exits", ThreadID::getID(), m_client->GetUserId());
+    app.logger().trace("Broadcaster thread  (client_id %d) exits", m_client->GetUserId());
 }
 
-//this is called all the way from the receiver threads, we should process this swiftly
-//and keep in mind that it is called crazily and concurently from lots of threads
-//we MUST copy the data too
-//also, this function can be called by threads owning clients_mutex !!!
-void Broadcaster::QueueMessage(int type, int uid, unsigned int streamid, unsigned int len, const char *data) {
-    if (m_keep_running.load() == false) {
+// this is called all the way from the receiver threads, we should process this swiftly
+// and keep in mind that it is called crazily and concurently from lots of threads
+// we MUST copy the data too
+// also, this function can be called by threads owning clients_mutex !!!
+void Broadcaster::QueueMessage(int type, int uid, unsigned int streamid, unsigned int len, const char *data)
+{
+    if (_activity.isStopped())
+    {
         return;
     }
     queue_entry_t msg = {type, uid, streamid, len, ""};
@@ -118,13 +112,18 @@ void Broadcaster::QueueMessage(int type, int uid, unsigned int streamid, unsigne
 
     {
         const std::lock_guard<std::mutex> scoped_lock(m_queue_mutex);
-        if (m_msg_queue.empty()) {
+        if (m_msg_queue.empty())
+        {
             m_packet_drop_counter = 0;
             m_is_dropping_packets = (++m_packet_good_counter > 3) ? false : m_is_dropping_packets;
-        } else if (type == RoRnet::MSG2_STREAM_DATA_DISCARDABLE) {
-            auto search = std::find_if(m_msg_queue.begin(), m_msg_queue.end(), [&](const queue_entry_t& m)
-                    { return m.type == RoRnet::MSG2_STREAM_DATA_DISCARDABLE && m.uid == uid && m.streamid == streamid; });
-            if (search != m_msg_queue.end()) {
+        }
+        else if (type == RoRnet::MSG2_STREAM_DATA_DISCARDABLE)
+        {
+            auto search = std::find_if(m_msg_queue.begin(), m_msg_queue.end(), [&](const queue_entry_t &m) {
+                return m.type == RoRnet::MSG2_STREAM_DATA_DISCARDABLE && m.uid == uid && m.streamid == streamid;
+            });
+            if (search != m_msg_queue.end())
+            {
                 // Found outdated discardable streamdata -> replace it
                 (*search) = msg;
                 m_packet_good_counter = 0;
@@ -136,6 +135,5 @@ void Broadcaster::QueueMessage(int type, int uid, unsigned int streamid, unsigne
         m_msg_queue.push_back(msg);
     }
 
-    m_queue_cond.signal();
+    m_queue_cond.notify_all();
 }
-

@@ -4,7 +4,7 @@
 // Started 030823
 //
 // License: LGPL v2.1+ (see the file LICENSE)
-// (c)2002-2003 Anders Lindström
+// (c)2002-2003 Anders Lindstrï¿½m
 
 /***********************************************************************
  *  This library is free software; you can redistribute it and/or      *
@@ -32,7 +32,7 @@
   #define O_NONBLOCK 1
 
   // Rigs of Rods HACK by `only_a_ptr`, 2016/05
-  // This macro blocks us from having a `Messaging::SendMessage` function.
+  // This macro blocks us from having a `Messaging::SWSendMessage` function.
   #ifdef SendMessage
     #undef SendMessage
   #endif

@@ -21,31 +21,35 @@
 #pragma once
 
 #include "SocketW.h"
-#include "mutexutils.h"
 #include "prerequisites.h"
 
-#include <pthread.h>
 #include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <future>
+#include <iostream>
+#include <mutex>
+#include <numeric>
+#include <thread>
+#include <vector>
 
-class Listener {
-private:
-    pthread_t m_thread;
+#include <Poco/Activity.h>
+
+class Listener
+{
+  private:
     SWInetSocket m_listen_socket;
     int m_listen_port;
-    Threading::SimpleCond m_ready_cond;
     Sequencer *m_sequencer;
-    std::atomic_bool m_thread_shutdown;
-public:
+    Poco::Activity<Listener> _activity;
+    void runActivity();
+
+  public:
     Listener(Sequencer *sequencer, int port);
 
-    ~Listener(void);
+    Poco::Activity<Listener> &activity()
+    {
+        return _activity;
+    }
 
-    void threadstart();
-
-    bool Initialize();
-
-    bool WaitUntilReady();
-
-    void Shutdown();
 };
-

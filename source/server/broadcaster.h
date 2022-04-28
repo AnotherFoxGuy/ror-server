@@ -20,20 +20,21 @@ along with Foobar. If not, see <http://www.gnu.org/licenses/>.
 
 #pragma once
 
-#include "rornet.h"
 #include "prerequisites.h"
+#include "rornet.h"
 
 #include <atomic>
 #include <deque>
 #include <mutex>
 
-#include "Poco/Activity.h"
+#include <Poco/Activity.h>
 
 class SWInetSocket;
 
 class Sequencer;
 
-struct queue_entry_t {
+struct queue_entry_t
+{
     int type;
     int uid;
     unsigned int streamid;
@@ -41,36 +42,42 @@ struct queue_entry_t {
     char data[RORNET_MAX_MESSAGE_LENGTH];
 };
 
-class Broadcaster {
-    friend void *StartBroadcasterThread(void *);
+void *StartBroadcasterThread(void *);
 
-public:
+class Broadcaster
+{
+  public:
     static const int QUEUE_SOFT_LIMIT = 100;
     static const int QUEUE_HARD_LIMIT = 300;
 
     Broadcaster(Sequencer *sequencer);
 
-    void Start(Client* client);
+    void Start(Client *client);
 
-    void Stop();
+    void QueueMessage(int msg_type, int client_id, unsigned int streamid, unsigned int payload_len,
+                      const char *payload);
 
-    void QueueMessage(int msg_type, int client_id, unsigned int streamid, unsigned int payload_len, const char *payload);
+    bool IsDroppingPackets() const
+    {
+        return m_is_dropping_packets;
+    }
 
-    bool IsDroppingPackets() const { return m_is_dropping_packets; }
+    Poco::Activity<Broadcaster> &activity()
+    {
+        return _activity;
+    }
 
-private:
-    void Run();
-
-    Poco::Activity<Broadcaster> _activity;
+  private:
+    void runActivity();
 
     Sequencer *m_sequencer;
-    std::thread m_thread;
+    Poco::Activity<Broadcaster> _activity;
     std::mutex m_queue_mutex;
-    Client* m_client;
-    std::atomic<bool> m_keep_running;
+    std::condition_variable m_queue_cond;
+    Client *m_client;
     bool m_is_dropping_packets;
-    int  m_packet_drop_counter;
-    int  m_packet_good_counter;
+    int m_packet_drop_counter;
+    int m_packet_good_counter;
 
     std::deque<queue_entry_t> m_msg_queue;
 };

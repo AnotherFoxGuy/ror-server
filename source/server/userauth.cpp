@@ -22,7 +22,6 @@ along with Foobar. If not, see <http://www.gnu.org/licenses/>.
 
 #include "config.h"
 #include "rornet.h"
-#include "logger.h"
 #include "http.h"
 #include "json/json.h"
 
@@ -43,6 +42,7 @@ UserAuth::UserAuth(std::string authFile) {
 }
 
 int UserAuth::readConfig(const char *authFile) {
+    auto &app = Poco::Util::Application::instance();
     FILE *f = fopen(authFile, "r");
     if (!f) {
         app.logger().warning("Couldn't open the local authorizations file ('%s'). No authorizations were loaded.",

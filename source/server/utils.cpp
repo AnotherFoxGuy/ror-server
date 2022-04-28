@@ -20,7 +20,6 @@ along with Foobar. If not, see <http://www.gnu.org/licenses/>.
 
 #include "utils.h"
 
-#include "logger.h"
 #include <string>
 #include <vector>
 #include <fstream>

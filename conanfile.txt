@@ -8,6 +8,8 @@ virtualrunenv
 [imports]
 bin, *.dll -> ./bin/ @ keep_path=False
 lib, *.dll -> ./bin/ @ keep_path=False
+lib, *.pdb -> ./bin/ @ keep_path=False
+bin, *.pdb -> ./bin/ @ keep_path=False
 
 [options]
 poco:enable_pagecompiler=True
