@@ -7,3 +7,4 @@ build
 cmake-build-*/
 \.idea/
 CMakeUserPresets.json
+.xmake
